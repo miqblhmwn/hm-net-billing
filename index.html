@@ -510,7 +510,10 @@
             <div>
               <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-bold text-slate-900">Kesehatan Redaman Optik (dB)</h2>
-                <i data-lucide="gauge" class="w-4 h-4 text-slate-400"></i>
+                <button type="button" onclick="openModalRedamanConfig()" class="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-[11px] font-bold transition flex items-center space-x-1" title="Edit batas referensi redaman optik">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>Edit Batas</span>
+                </button>
               </div>
               <p class="text-xs text-slate-500 mb-4">Standar toleransi redaman ONT pelanggan HM NET:</p>
               
@@ -520,8 +523,8 @@
                   <div class="flex items-center space-x-2.5">
                     <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
                     <div>
-                      <div class="text-xs font-bold text-emerald-900">Normal / Bagus (&ge; -23 dB)</div>
-                      <div class="text-[11px] text-emerald-700">Contoh: -14.8 s.d -23.0 dB</div>
+                      <div id="lbl-dash-redaman-good" class="text-xs font-bold text-emerald-900">Normal / Bagus (&ge; -23 dB)</div>
+                      <div id="sub-dash-redaman-good" class="text-[11px] text-emerald-700">Contoh: -14.8 s.d -23.0 dB</div>
                     </div>
                   </div>
                   <span id="stat-redaman-good" class="text-sm font-black text-emerald-800">0 Unit</span>
@@ -532,8 +535,8 @@
                   <div class="flex items-center space-x-2.5">
                     <div class="w-3 h-3 rounded-full bg-amber-500"></div>
                     <div>
-                      <div class="text-xs font-bold text-amber-900">Waspada (-24 s.d -26 dB)</div>
-                      <div class="text-[11px] text-amber-700">Perlu monitoring berkala</div>
+                      <div id="lbl-dash-redaman-warn" class="text-xs font-bold text-amber-900">Waspada (-24 s.d -26 dB)</div>
+                      <div id="sub-dash-redaman-warn" class="text-[11px] text-amber-700">Perlu monitoring berkala</div>
                     </div>
                   </div>
                   <span id="stat-redaman-warning" class="text-sm font-black text-amber-800">0 Unit</span>
@@ -544,8 +547,8 @@
                   <div class="flex items-center space-x-2.5">
                     <div class="w-3 h-3 rounded-full bg-rose-500"></div>
                     <div>
-                      <div class="text-xs font-bold text-rose-900">Kritis (&lt; -27 dB)</div>
-                      <div class="text-[11px] text-rose-700">Rentan LOS / Redaman Drop</div>
+                      <div id="lbl-dash-redaman-bad" class="text-xs font-bold text-rose-900">Kritis (&lt; -27 dB)</div>
+                      <div id="sub-dash-redaman-bad" class="text-[11px] text-rose-700">Rentan LOS / Redaman Drop</div>
                     </div>
                   </div>
                   <span id="stat-redaman-bad" class="text-sm font-black text-rose-800">0 Unit</span>
@@ -624,6 +627,20 @@
               <option value="GANTI">GANTI</option>
             </select>
 
+            <!-- Filter Redaman -->
+            <select id="filter-redaman" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-700 focus:outline-none">
+              <option value="ALL">Semua Redaman</option>
+              <option value="GOOD">Hijau (Bagus)</option>
+              <option value="WARNING">Kuning (Waspada)</option>
+              <option value="BAD">Merah (Kritis)</option>
+            </select>
+
+            <!-- Edit Batas Referensi Redaman Button -->
+            <button onclick="openModalRedamanConfig()" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Edit batas referensi nilai redaman optik (Hijau, Kuning, Merah)">
+              <i data-lucide="sliders" class="w-4 h-4 text-emerald-700"></i>
+              <span>Edit Batas Redaman</span>
+            </button>
+
             <!-- Kelola Merk / Type Modem Button -->
             <button onclick="openModalModemTypes()" class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Tambah atau edit daftar nama merk & type modem ONT">
               <i data-lucide="router" class="w-4 h-4 text-amber-700"></i>
@@ -671,10 +688,14 @@
           <!-- Table Footer stats -->
           <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
             <div>Menampilkan <span id="count-displayed-pelanggan" class="font-bold text-slate-800">0</span> dari <span id="count-total-pelanggan" class="font-bold text-slate-800">0</span> total pelanggan terdaftar</div>
-            <div class="flex items-center space-x-4">
-              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> <span>&ge; -23 dB (Bagus)</span></span>
-              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> <span>-24 s.d -26 dB (Waspada)</span></span>
-              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span> <span>&lt; -27 dB (Kritis)</span></span>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> <span id="lbl-footer-redaman-good">&ge; -23 dB (Bagus)</span></span>
+              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> <span id="lbl-footer-redaman-warn">-24 s.d -26 dB (Waspada)</span></span>
+              <span class="flex items-center space-x-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span> <span id="lbl-footer-redaman-bad">&lt; -27 dB (Kritis)</span></span>
+              <button type="button" onclick="openModalRedamanConfig()" class="px-2 py-0.5 bg-white hover:bg-brand-50 text-brand-700 border border-brand-200 rounded-md text-[11px] font-bold transition flex items-center space-x-1">
+                <i data-lucide="edit-3" class="w-3 h-3"></i>
+                <span>Edit Batas</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1881,14 +1902,20 @@
 
             <!-- Nilai Redaman (dB desimal) -->
             <div class="sm:col-span-2">
-              <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Nilai Redaman (dB) *</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700 uppercase">Nilai Redaman (dB) *</label>
+                <button type="button" onclick="openModalRedamanConfig()" class="text-[11px] font-bold text-brand-600 hover:text-brand-800 flex items-center space-x-1 transition">
+                  <i data-lucide="sliders" class="w-3 h-3"></i>
+                  <span>Edit Batas Referensi</span>
+                </button>
+              </div>
               <div class="flex items-center space-x-3">
                 <input type="number" step="0.1" id="cust-redaman" required placeholder="-18.5" oninput="previewRedamanColor()" class="w-1/2 text-xs px-3.5 py-2.5 border border-slate-300 rounded-xl font-bold focus:ring-2 focus:ring-brand-500 focus:outline-none">
                 <div id="preview-redaman-badge" class="px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-slate-100 text-slate-600">
                   <span>Indikator Otomatis</span>
                 </div>
               </div>
-              <p class="text-[11px] text-slate-400 mt-1">
+              <p id="lbl-modal-redaman-criteria" class="text-[11px] text-slate-400 mt-1">
                 Kriteria: <span class="text-emerald-600 font-semibold">&ge; -23 dB (Bagus)</span> | 
                 <span class="text-amber-600 font-semibold">-24 s.d -26 dB (Waspada)</span> | 
                 <span class="text-rose-600 font-semibold">&lt; -27 dB (Kritis)</span>
@@ -2407,6 +2434,117 @@
     </div>
   </div>
 
+  <!-- ========================================================= -->
+  <!-- MODAL: EDIT BATAS REFERENSI REDAMAN OPTIK (dB)            -->
+  <!-- ========================================================= -->
+  <div id="modal-redaman-config" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+      <!-- Header -->
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="sliders" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold">Edit Batas Referensi Redaman Optik (dB)</h3>
+            <p class="text-[11px] text-slate-300">Sesuaikan standar toleransi sinyal ONT Hijau, Kuning, dan Merah</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModalRedamanConfig()" class="text-slate-300 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form onsubmit="saveRedamanConfigForm(event)" class="p-6 space-y-4">
+        <!-- 1. Batas Hijau (Normal / Bagus) -->
+        <div class="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+              <span class="text-xs font-extrabold text-emerald-950 uppercase">1. Kategori Bagus / Normal (Hijau)</span>
+            </div>
+            <span id="preview-cfg-good-count" class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[11px] font-black">0 Pelanggan</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+            <div>
+              <label class="block text-[11px] font-bold text-emerald-900 mb-1">Batas Bawah Normal (&ge; dB) *</label>
+              <div class="relative">
+                <input type="number" step="0.1" id="cfg-redaman-good" required oninput="updateRedamanConfigLivePreview()" class="w-full text-xs px-3 py-2 bg-white border border-emerald-300 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <span class="absolute right-3 top-2 text-xs font-bold text-slate-400">dB</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-emerald-800">
+              Nilai redaman <strong>lebih besar atau sama dengan</strong> angka ini (contoh: <span id="preview-cfg-good-desc" class="font-bold">&ge; -23 dB</span>) berstatus <strong>Bagus / Normal</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Batas Kuning (Waspada) -->
+        <div class="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+              <span class="text-xs font-extrabold text-amber-950 uppercase">2. Kategori Waspada (Kuning)</span>
+            </div>
+            <span id="preview-cfg-warn-count" class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[11px] font-black">0 Pelanggan</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+            <div>
+              <label class="block text-[11px] font-bold text-amber-900 mb-1">Batas Bawah Waspada (s.d dB) *</label>
+              <div class="relative">
+                <input type="number" step="0.1" id="cfg-redaman-warn" required oninput="updateRedamanConfigLivePreview()" class="w-full text-xs px-3 py-2 bg-white border border-amber-300 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <span class="absolute right-3 top-2 text-xs font-bold text-slate-400">dB</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-amber-800">
+              Rentang di bawah Normal sampai angka ini (<span id="preview-cfg-warn-desc" class="font-bold">-24 s.d -26 dB</span>) berstatus <strong>Waspada</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Batas Merah (Kritis) -->
+        <div class="p-4 bg-rose-50/70 border border-rose-200 rounded-2xl space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+              <span class="text-xs font-extrabold text-rose-950 uppercase">3. Kategori Kritis / Drop (Merah)</span>
+            </div>
+            <span id="preview-cfg-bad-count" class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md text-[11px] font-black">0 Pelanggan</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+            <div>
+              <label class="block text-[11px] font-bold text-rose-900 mb-1">Batas Mulai Kritis (&lt; / &le; dB) *</label>
+              <div class="relative">
+                <input type="number" step="0.1" id="cfg-redaman-bad" required oninput="updateRedamanConfigLivePreview()" class="w-full text-xs px-3 py-2 bg-white border border-rose-300 rounded-xl font-black text-slate-900 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                <span class="absolute right-3 top-2 text-xs font-bold text-slate-400">dB</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-rose-800">
+              Nilai redaman mencapai atau lebih rendah dari <span id="preview-cfg-bad-desc" class="font-bold">&lt; -27 dB</span> berstatus <strong>Kritis (Rentan LOS)</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <button type="button" onclick="resetRedamanConfigDefault()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            <span>Reset Default (-23 / -26 / -27)</span>
+          </button>
+          <div class="flex items-center space-x-2">
+            <button type="button" onclick="closeModalRedamanConfig()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition">
+              Batal
+            </button>
+            <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center space-x-1.5">
+              <i data-lucide="save" class="w-4 h-4"></i>
+              <span>Simpan Batas Redaman</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
     <div class="bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-3 text-xs font-semibold border border-slate-700">
@@ -2416,7 +2554,7 @@
   </div>
 
   <!-- External Application Logic Script -->
-  <script src="app.js?v=20261107_v10"></script>
+  <script src="app.js?v=20261107_v11"></script>
 
   <script>
     // Initialize Lucide icons on start

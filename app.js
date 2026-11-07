@@ -11,7 +11,14 @@ const STORAGE_KEYS = {
   ADMIN_ACCOUNT: 'hmnet_admin_account_v1',
   USERS: 'hmnet_users_v2',
   WA_TEMPLATES: 'hmnet_wa_templates_v1',
-  MODEM_TYPES: 'hmnet_modem_types_v1'
+  MODEM_TYPES: 'hmnet_modem_types_v1',
+  REDAMAN_CONFIG: 'hmnet_redaman_config_v1'
+};
+
+const DEFAULT_REDAMAN_CONFIG = {
+  goodLimit: -23,
+  warnLimit: -26,
+  badLimit: -27
 };
 
 const DEFAULT_MODEM_TYPES = [
@@ -956,12 +963,34 @@ function toggleDataDropdown() {
 }
 
 // ==========================================
-// REDAMAN HELPER (According to HM NET Specification)
-// Hijau: >= -23 dB
-// Kuning: -24 s.d -26 dB
-// Merah: < -27 dB
+// REDAMAN HELPER & CONFIGURABLE THRESHOLDS
+// Default:
+// Hijau (Bagus): >= -23 dB
+// Kuning (Waspada): -24 s.d -26 dB
+// Merah (Kritis): < -27 dB
 // ==========================================
-function getRedamanClassification(val) {
+function getRedamanConfig() {
+  const raw = localStorage.getItem(STORAGE_KEYS.REDAMAN_CONFIG);
+  if (!raw) return { ...DEFAULT_REDAMAN_CONFIG };
+  try {
+    const parsed = JSON.parse(raw);
+    const goodLimit = parseFloat(parsed.goodLimit);
+    const warnLimit = parseFloat(parsed.warnLimit);
+    const badLimit = parseFloat(parsed.badLimit);
+    if (!isNaN(goodLimit) && !isNaN(warnLimit) && !isNaN(badLimit)) {
+      return { goodLimit, warnLimit, badLimit };
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { ...DEFAULT_REDAMAN_CONFIG };
+}
+
+function saveRedamanConfig(cfg) {
+  localStorage.setItem(STORAGE_KEYS.REDAMAN_CONFIG, JSON.stringify(cfg));
+}
+
+function getRedamanClassification(val, customCfg = null) {
   const num = parseFloat(val);
   if (isNaN(num)) {
     return {
@@ -971,15 +1000,24 @@ function getRedamanClassification(val) {
       badgeClass: 'bg-slate-400'
     };
   }
-  
-  if (num >= -23.0) {
+
+  const cfg = customCfg || getRedamanConfig();
+  const goodLimit = Number(cfg.goodLimit);
+  const warnLimit = Number(cfg.warnLimit);
+  const badLimit = Number(cfg.badLimit);
+
+  // Cutoff between Waspada (Kuning) and Kritis (Merah):
+  // If badLimit < warnLimit (e.g. warnLimit = -26, badLimit = -27), any value <= -27.0 is Kritis and > -27.0 is Waspada
+  const isWarning = badLimit < warnLimit ? (num > badLimit) : (num >= warnLimit);
+
+  if (num >= goodLimit) {
     return {
       category: 'GOOD',
       label: 'Bagus / Normal',
       colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
       badgeClass: 'bg-emerald-500'
     };
-  } else if (num >= -26.9) {
+  } else if (isWarning) {
     return {
       category: 'WARNING',
       label: 'Waspada',
@@ -987,7 +1025,6 @@ function getRedamanClassification(val) {
       badgeClass: 'bg-amber-500'
     };
   } else {
-    // < -27 dB
     return {
       category: 'BAD',
       label: 'Kritis',
@@ -995,6 +1032,142 @@ function getRedamanClassification(val) {
       badgeClass: 'bg-rose-500'
     };
   }
+}
+
+function formatWarnRangeText(cfg) {
+  const startWarn = Number.isInteger(Number(cfg.goodLimit))
+    ? Number(cfg.goodLimit) - 1
+    : Number((Number(cfg.goodLimit) - 0.1).toFixed(1));
+  return `${startWarn} s.d ${cfg.warnLimit} dB`;
+}
+
+function updateRedamanReferenceLabels() {
+  const cfg = getRedamanConfig();
+  const warnRange = formatWarnRangeText(cfg);
+
+  // 1. Dashboard Card Labels
+  const dashGood = document.getElementById('lbl-dash-redaman-good');
+  const dashGoodSub = document.getElementById('sub-dash-redaman-good');
+  const dashWarn = document.getElementById('lbl-dash-redaman-warn');
+  const dashBad = document.getElementById('lbl-dash-redaman-bad');
+
+  if (dashGood) dashGood.innerHTML = `Normal / Bagus (&ge; ${cfg.goodLimit} dB)`;
+  if (dashGoodSub) dashGoodSub.textContent = `Contoh: -14.8 s.d ${Number(cfg.goodLimit).toFixed(1)} dB`;
+  if (dashWarn) dashWarn.textContent = `Waspada (${warnRange})`;
+  if (dashBad) dashBad.innerHTML = `Kritis (&lt; ${cfg.badLimit} dB)`;
+
+  // 2. Master Pelanggan Footer Legend
+  const footGood = document.getElementById('lbl-footer-redaman-good');
+  const footWarn = document.getElementById('lbl-footer-redaman-warn');
+  const footBad = document.getElementById('lbl-footer-redaman-bad');
+
+  if (footGood) footGood.innerHTML = `&ge; ${cfg.goodLimit} dB (Bagus)`;
+  if (footWarn) footWarn.textContent = `${warnRange} (Waspada)`;
+  if (footBad) footBad.innerHTML = `&lt; ${cfg.badLimit} dB (Kritis)`;
+
+  // 3. Modal Pelanggan Criteria Text
+  const modalCrit = document.getElementById('lbl-modal-redaman-criteria');
+  if (modalCrit) {
+    modalCrit.innerHTML = `
+      Kriteria: <span class="text-emerald-600 font-semibold">&ge; ${cfg.goodLimit} dB (Bagus)</span> | 
+      <span class="text-amber-600 font-semibold">${warnRange} (Waspada)</span> | 
+      <span class="text-rose-600 font-semibold">&lt; ${cfg.badLimit} dB (Kritis)</span>
+    `;
+  }
+}
+
+function openModalRedamanConfig() {
+  const cfg = getRedamanConfig();
+  const gInput = document.getElementById('cfg-redaman-good');
+  const wInput = document.getElementById('cfg-redaman-warn');
+  const bInput = document.getElementById('cfg-redaman-bad');
+
+  if (gInput) gInput.value = cfg.goodLimit;
+  if (wInput) wInput.value = cfg.warnLimit;
+  if (bInput) bInput.value = cfg.badLimit;
+
+  updateRedamanConfigLivePreview();
+  document.getElementById('modal-redaman-config')?.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeModalRedamanConfig() {
+  document.getElementById('modal-redaman-config')?.classList.add('hidden');
+}
+
+function updateRedamanConfigLivePreview() {
+  const gVal = parseFloat(document.getElementById('cfg-redaman-good')?.value);
+  const wVal = parseFloat(document.getElementById('cfg-redaman-warn')?.value);
+  const bVal = parseFloat(document.getElementById('cfg-redaman-bad')?.value);
+
+  const currentCfg = getRedamanConfig();
+  const tempCfg = {
+    goodLimit: !isNaN(gVal) ? gVal : currentCfg.goodLimit,
+    warnLimit: !isNaN(wVal) ? wVal : currentCfg.warnLimit,
+    badLimit: !isNaN(bVal) ? bVal : currentCfg.badLimit
+  };
+
+  const warnRange = formatWarnRangeText(tempCfg);
+  const gDesc = document.getElementById('preview-cfg-good-desc');
+  const wDesc = document.getElementById('preview-cfg-warn-desc');
+  const bDesc = document.getElementById('preview-cfg-bad-desc');
+
+  if (gDesc) gDesc.innerHTML = `&ge; ${tempCfg.goodLimit} dB`;
+  if (wDesc) wDesc.textContent = warnRange;
+  if (bDesc) bDesc.innerHTML = `&lt; ${tempCfg.badLimit} dB`;
+
+  let cGood = 0, cWarn = 0, cBad = 0;
+  (state.customers || []).forEach(c => {
+    const cat = getRedamanClassification(c.redaman, tempCfg).category;
+    if (cat === 'GOOD') cGood++;
+    else if (cat === 'WARNING') cWarn++;
+    else if (cat === 'BAD') cBad++;
+  });
+
+  const gCountEl = document.getElementById('preview-cfg-good-count');
+  const wCountEl = document.getElementById('preview-cfg-warn-count');
+  const bCountEl = document.getElementById('preview-cfg-bad-count');
+
+  if (gCountEl) gCountEl.textContent = `${cGood} Pelanggan`;
+  if (wCountEl) wCountEl.textContent = `${cWarn} Pelanggan`;
+  if (bCountEl) bCountEl.textContent = `${cBad} Pelanggan`;
+}
+
+function saveRedamanConfigForm(e) {
+  e.preventDefault();
+  const goodLimit = parseFloat(document.getElementById('cfg-redaman-good')?.value);
+  const warnLimit = parseFloat(document.getElementById('cfg-redaman-warn')?.value);
+  const badLimit = parseFloat(document.getElementById('cfg-redaman-bad')?.value);
+
+  if (isNaN(goodLimit) || isNaN(warnLimit) || isNaN(badLimit)) {
+    alert('Mohon isi ketiga angka batas redaman dengan benar.');
+    return;
+  }
+
+  if (goodLimit <= warnLimit) {
+    alert(`Batas Normal/Bagus (${goodLimit} dB) harus lebih besar dari Batas Waspada (${warnLimit} dB).\nContoh: Normal -23 dB, Waspada -26 dB.`);
+    return;
+  }
+
+  if (warnLimit < badLimit) {
+    alert(`Batas Waspada (${warnLimit} dB) tidak boleh lebih kecil dari Batas Kritis (${badLimit} dB).\nContoh: Waspada -26 dB, Kritis -27 dB.`);
+    return;
+  }
+
+  saveRedamanConfig({ goodLimit, warnLimit, badLimit });
+  updateRedamanReferenceLabels();
+  renderDashboard();
+  renderTablePelanggan();
+  previewRedamanColor();
+  closeModalRedamanConfig();
+  showToast(`Batas referensi redaman berhasil diperbarui (>= ${goodLimit} dB | s.d ${warnLimit} dB | < ${badLimit} dB)!`);
+}
+
+function resetRedamanConfigDefault() {
+  document.getElementById('cfg-redaman-good').value = DEFAULT_REDAMAN_CONFIG.goodLimit;
+  document.getElementById('cfg-redaman-warn').value = DEFAULT_REDAMAN_CONFIG.warnLimit;
+  document.getElementById('cfg-redaman-bad').value = DEFAULT_REDAMAN_CONFIG.badLimit;
+  updateRedamanConfigLivePreview();
 }
 
 function previewRedamanColor() {
@@ -1064,6 +1237,7 @@ function renderDashboard() {
   if (piucEl) piucEl.textContent = `${unpaidCount} belum lunas`;
 
   // Redaman Statistics
+  updateRedamanReferenceLabels();
   let countGood = 0;
   let countWarning = 0;
   let countBad = 0;
@@ -1187,9 +1361,12 @@ function renderTablePelanggan() {
   const tbody = document.getElementById('tbody-pelanggan');
   if (!tbody) return;
 
+  updateRedamanReferenceLabels();
+
   const searchQuery = (document.getElementById('search-pelanggan')?.value || '').toLowerCase().trim();
   const filterPon = document.getElementById('filter-pon')?.value || 'ALL';
   const filterStatusOnt = document.getElementById('filter-status-ont')?.value || 'ALL';
+  const filterRedaman = document.getElementById('filter-redaman')?.value || 'ALL';
 
   const filtered = state.customers.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery) ||
@@ -1198,7 +1375,8 @@ function renderTablePelanggan() {
                           (c.address && c.address.toLowerCase().includes(searchQuery));
     const matchesPon = filterPon === 'ALL' || String(c.pon) === String(filterPon);
     const matchesOnt = filterStatusOnt === 'ALL' || c.ontStatus === filterStatusOnt;
-    return matchesSearch && matchesPon && matchesOnt;
+    const matchesRedaman = filterRedaman === 'ALL' || getRedamanClassification(c.redaman).category === filterRedaman;
+    return matchesSearch && matchesPon && matchesOnt && matchesRedaman;
   });
 
   tbody.innerHTML = '';
