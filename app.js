@@ -9,7 +9,8 @@ const STORAGE_KEYS = {
   EXPENSES: 'hmnet_expenses_v1',
   AUTH_SESSION: 'hmnet_auth_session_v1',
   ADMIN_ACCOUNT: 'hmnet_admin_account_v1',
-  USERS: 'hmnet_users_v2'
+  USERS: 'hmnet_users_v2',
+  WA_TEMPLATES: 'hmnet_wa_templates_v1'
 };
 
 const DEFAULT_ADMIN = {
@@ -215,6 +216,14 @@ let state = {
   bills: [],
   expenses: [],
   currentTab: 'dashboard',
+  broadcastSubtab: 'unpaid',
+  unpaidBroadcastTplKey: 'tagihan',
+  outageBroadcastTplKey: 'gangguan',
+  masterTemplateEditingKey: 'tagihan',
+  unpaidSelectedIds: new Set(),
+  outageSelectedIds: new Set(),
+  broadcastQueue: [],
+  broadcastAutoTimer: null,
   selectedYear: 2026,
   selectedMonth: 11, // 1 to 12 (November 2026 default)
   gridMode: 'matrix', // 'matrix' or 'single'
@@ -390,6 +399,11 @@ function applyUserPermissions(user) {
   const sideTagihan = document.getElementById('side-tagihan');
   if (sideTagihan) {
     sideTagihan.style.display = perms.tagihan_view ? 'flex' : 'none';
+  }
+
+  const sideBroadcast = document.getElementById('side-broadcast');
+  if (sideBroadcast) {
+    sideBroadcast.style.display = (perms.tagihan_wa || perms.tagihan_view || perms.pelanggan_view) ? 'flex' : 'none';
   }
 
   const sideKeuangan = document.getElementById('side-keuangan');
@@ -806,6 +820,11 @@ function setupDateSelectors() {
   populate(gridYear, yearItems, state.selectedYear);
   populate(gridMonth, monthItems, state.selectedMonth);
 
+  const bcastYear = document.getElementById('bcast-unpaid-year');
+  const bcastMonth = document.getElementById('bcast-unpaid-month');
+  populate(bcastYear, yearItems, state.selectedYear);
+  populate(bcastMonth, monthItems, state.selectedMonth);
+
   if (expPeriod) {
     const mm = String(state.selectedMonth).padStart(2, '0');
     expPeriod.value = `${state.selectedYear}-${mm}`;
@@ -887,6 +906,7 @@ function switchTab(tabId) {
     dashboard: 'Dashboard',
     pelanggan: 'Master Pelanggan & ONT',
     tagihan: 'Tagihan & Grid Bulanan',
+    broadcast: 'Broadcast & Template WA',
     keuangan: 'Pengeluaran & Laba',
     users: 'Kelola Akun Anak & Hak Akses'
   };
@@ -897,7 +917,7 @@ function switchTab(tabId) {
   }
 
   // Toggle Sections & Sidebar items
-  ['dashboard', 'pelanggan', 'tagihan', 'keuangan', 'users'].forEach(id => {
+  ['dashboard', 'pelanggan', 'tagihan', 'broadcast', 'keuangan', 'users'].forEach(id => {
     const el = document.getElementById(`tab-${id}`);
     const sideBtn = document.getElementById(`side-${id}`);
     
@@ -924,6 +944,8 @@ function switchTab(tabId) {
     renderTablePelanggan();
   } else if (tabId === 'tagihan') {
     renderGridTagihan();
+  } else if (tabId === 'broadcast') {
+    initBroadcastTab();
   } else if (tabId === 'keuangan') {
     renderExpenses();
   } else if (tabId === 'users') {
@@ -1509,6 +1531,9 @@ function renderGridMatrix() {
     cellsHtml += `
       <td class="py-2 px-3 text-center">
         <div class="flex items-center justify-center space-x-1">
+          <button onclick="openCustomerPayPortal('${c.id}', ${currentYear}, ${state.selectedMonth})" title="Buka Halaman Link Bayar Pelanggan" class="p-1 rounded text-brand-600 hover:bg-brand-50 transition">
+            <i data-lucide="credit-card" class="w-4 h-4"></i>
+          </button>
           <button onclick="openModalHistory('${c.id}')" title="Histori Pembayaran" class="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition">
             <i data-lucide="history" class="w-4 h-4"></i>
           </button>
@@ -1575,6 +1600,10 @@ function renderGridSingleMonth() {
         <div class="flex items-center justify-center space-x-1.5">
           <button onclick="handleGridCellClick('${c.id}', ${currentYear}, ${currentMonth})" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition">
             Update Bayar
+          </button>
+          <button onclick="openCustomerPayPortal('${c.id}', ${currentYear}, ${currentMonth})" title="Buka Halaman Link Bayar Pelanggan" class="px-2 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 font-bold rounded-lg text-[11px] transition flex items-center space-x-1">
+            <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
+            <span>Link Bayar</span>
           </button>
           <button onclick="openModalWhatsApp('${c.id}', ${currentYear}, ${currentMonth})" title="Kirim Tagihan WA" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
             <i data-lucide="message-circle" class="w-4 h-4"></i>
@@ -1793,6 +1822,13 @@ function openModalWhatsApp(customerId, year = null, month = null) {
   phoneInput.value = cust.phone || '';
   onWaPhoneChange();
 
+  // Update dynamic payment info box in modal
+  const tpls = getWaTemplates();
+  const payInfoBox = document.getElementById('wa-modal-payment-info-content');
+  if (payInfoBox && tpls.paymentInfo) {
+    payInfoBox.textContent = tpls.paymentInfo;
+  }
+
   // Template selector default
   if (bill.status === 'LUNAS') {
     selectWaTemplate('lunas');
@@ -1828,7 +1864,7 @@ function selectWaTemplate(tplKey) {
   state.waActiveTemplate = tplKey;
 
   // Toggle button styles
-  ['tagihan', 'peringatan', 'lunas'].forEach(k => {
+  ['tagihan', 'peringatan', 'lunas', 'gangguan'].forEach(k => {
     const btn = document.getElementById(`btn-tpl-${k}`);
     if (btn) {
       if (k === tplKey) {
@@ -1851,57 +1887,22 @@ function selectWaTemplate(tplKey) {
     amountPaid: 0,
     status: 'BELUM',
     paymentDate: '',
-    paymentMethod: ''
+    paymentMethod: '',
+    notes: ''
   };
 
-  const periodStr = `${MONTH_NAMES[m - 1]} ${y}`;
-  const tarifStr = formatRupiah(bill.tariff);
-  const dibayarStr = formatRupiah(bill.amountPaid || bill.tariff);
-
-  let message = '';
-
-  if (tplKey === 'tagihan') {
-    message = `*PEMBERITAHUAN TAGIHAN INTERNET HM NET*\n` +
-`=================================\n` +
-`Halo Kak *${cust.name}*,\n\n` +
-`Berikut adalah rincian tagihan internet Wi-Fi Anda untuk periode *${periodStr}*:\n` +
-`• Paket: ${cust.speed}\n` +
-`• Nominal Tagihan: *${tarifStr}*\n` +
-`• Status: *BELUM DIBAYAR*\n` +
-`• Jatuh Tempo: Tanggal 10 ${periodStr}\n\n` +
-`Pembayaran dapat ditransfer melalui:\n` +
-`🏦 *BCA*: 123-456-7890 (a.n HM NET)\n` +
-`🏦 *BRI*: 0987-654-321 (a.n HM NET)\n` +
-`💵 *Cash / Tunai*: Ke kantor / teknisi HM NET saat kunjungan\n\n` +
-`Mohon konfirmasi bukti transfer jika sudah membayar. Terima kasih atas kerjasamanya! 🙏\n` +
-`*HM NET - Akses Internet Rumahan*`;
-  } else if (tplKey === 'peringatan') {
-    message = `*PERINGATAN JATUH TEMPO & ISOLIR - HM NET*\n` +
-`=================================\n` +
-`Penting! Yth. Kak *${cust.name}*,\n\n` +
-`Tagihan internet Wi-Fi Anda periode *${periodStr}* sebesar *${tarifStr}* telah melewati batas jatuh tempo.\n\n` +
-`Untuk menjaga kelancaran koneksi internet Anda dan menghindari isolir (pemutusan sementara), mohon untuk segera menyelesaikan pembayaran tagihan Anda hari ini.\n\n` +
-`Pembayaran dapat ditransfer ke:\n` +
-`🏦 *BCA*: 123-456-7890 (a.n HM NET)\n` +
-`🏦 *BRI*: 0987-654-321 (a.n HM NET)\n\n` +
-`*Abaikan pesan ini bila sudah melakukan pembayaran*. Terima kasih atas perhatiannya! 🙏\n` +
-`*HM NET - Akses Internet Rumahan*`;
-  } else if (tplKey === 'lunas') {
-    message = `*KUITANSI RESMI PEMBAYARAN HM NET*\n` +
-`=================================\n` +
-`Terima kasih Kak *${cust.name}*!\n\n` +
-`Pembayaran internet Wi-Fi Anda telah berhasil kami terima dan dinyatakan *LUNAS*:\n` +
-`• Periode: *${periodStr}*\n` +
-`• Paket: ${cust.speed}\n` +
-`• Total Bayar: *${dibayarStr}* (LUNAS)\n` +
-`• Tanggal Bayar: ${bill.paymentDate || new Date().toISOString().split('T')[0]}\n` +
-`• Metode Bayar: ${bill.paymentMethod || 'Cash / Tunai'}\n` +
-(bill.notes ? `• Catatan: "${bill.notes}"\n` : '') +
-`=================================\n` +
-`Layanan internet Anda aktif dengan lancar. Jika ada kendala teknis jaringan, silakan hubungi kami. Salam hormat, *HM NET*! 🚀`;
-  }
+  const tpls = getWaTemplates();
+  const rawTpl = tpls[tplKey] || tpls.tagihan;
+  const message = compileWaTemplate(rawTpl, cust, bill, { year: y, month: m });
 
   document.getElementById('wa-message-text').value = message;
+
+  const clickableLinkEl = document.getElementById('wa-clickable-pay-link');
+  if (clickableLinkEl) {
+    const payUrl = getCustomerPayUrl(cust.id, y, m, cust, bill);
+    clickableLinkEl.textContent = payUrl;
+    clickableLinkEl.href = payUrl;
+  }
 }
 
 function copyWaMessageToClipboard() {
@@ -2186,11 +2187,12 @@ function deleteExpense(expId) {
 function exportDataJSON() {
   const exportPayload = {
     app: 'HM NET Billing System',
-    version: '1.0',
+    version: '1.1',
     exportedAt: new Date().toISOString(),
     customers: state.customers,
     bills: state.bills,
-    expenses: state.expenses
+    expenses: state.expenses,
+    waTemplates: getWaTemplates()
   };
 
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
@@ -2218,6 +2220,9 @@ function importDataJSON(event) {
         saveCustomers();
         saveBills();
         saveExpenses();
+        if (data.waTemplates) {
+          saveWaTemplates(data.waTemplates);
+        }
         initApp();
         showToast('Database berhasil dipulihkan dari backup!');
       } else {
@@ -2848,10 +2853,1815 @@ function deleteUserAccount(userId) {
   }
 }
 
+// =========================================================
+// WHATSAPP TEMPLATES & BULK BROADCAST SYSTEM (TAGIHAN & GANGGUAN)
+// =========================================================
+const DEFAULT_WA_TEMPLATES = {
+  bankBca: '1840005969488 a.n HM NET',
+  bankBri: '592801012731509 a.n HM NET',
+  ewalletInfo: 'DANA: 085691693286 | LinkAja: 085691693286',
+  adminWa: '085691693286',
+  publicDomain: '',
+  qrisImageDataUrl: '',
+  useUniqueCode: false,
+  paymentInfo:
+`🏦 *Mandiri*: 1840005969488 (a.n HM NET)
+🏦 *BRI*: 592801012731509 (a.n HM NET)
+👛 *DANA*: 085691693286 (a.n HM NET)
+👛 *LinkAja*: 085691693286 (a.n HM NET)
+💵 *Bayar Manual / Tunai*: Ke kantor atau teknisi HM NET saat kunjungan`,
+  dueDateDay: 'Tanggal 10',
+  fonnteToken: '',
+  tagihan:
+`*PEMBERITAHUAN TAGIHAN INTERNET HM NET*
+=================================
+Halo Kak *{nama}*,
+
+Berikut adalah rincian tagihan internet Wi-Fi Anda untuk periode *{periode}*:
+• Paket: {paket}
+• Nominal Tagihan: *{tagihan}*
+• Status: *{status}*
+• Jatuh Tempo: {jatuh_tempo}
+
+💳 *OPSI 1 — BAYAR ONLINE OTOMATIS (KLIK LINK):*
+Cukup klik link biru di bawah ini untuk memilih metode bayar (QRIS / Mandiri / BRI / DANA / LinkAja) & pembayaran otomatis tercatat di sistem:
+{link_bayar}
+
+💵 *OPSI 2 — PEMBAYARAN MANUAL / TUNAI:*
+{rekening}
+
+Terima kasih atas kerjasamanya! 🙏
+*HM NET - Akses Internet Rumahan*`,
+
+  peringatan:
+`*PERINGATAN JATUH TEMPO & ISOLIR - HM NET*
+=================================
+Penting! Yth. Kak *{nama}*,
+
+Tagihan internet Wi-Fi Anda periode *{periode}* sebesar *{tagihan}* telah melewati batas jatuh tempo ({jatuh_tempo}).
+
+Untuk menjaga kelancaran koneksi internet Anda dan menghindari isolir (pemutusan sementara), mohon untuk segera menyelesaikan pembayaran tagihan Anda:
+
+💳 *Klik Link Pembayaran Otomatis:*
+{link_bayar}
+
+Atau melalui pembayaran manual:
+{rekening}
+
+*Abaikan pesan ini bila sudah melakukan pembayaran*. Terima kasih atas perhatiannya! 🙏
+*HM NET - Akses Internet Rumahan*`,
+
+  lunas:
+`*KUITANSI RESMI PEMBAYARAN HM NET*
+=================================
+Terima kasih Kak *{nama}*!
+
+Pembayaran internet Wi-Fi Anda telah berhasil kami terima dan dinyatakan *LUNAS*:
+• Periode: *{periode}*
+• Paket: {paket}
+• Total Bayar: *{dibayar}* (LUNAS)
+• Tanggal Bayar: {tgl_bayar}
+• Metode Bayar: {metode_bayar}
+{catatan}=================================
+Layanan internet Anda aktif dengan lancar. Jika ada kendala teknis jaringan, silakan hubungi kami. Salam hormat, *HM NET*! 🚀`,
+
+  gangguan:
+`*PEMBERITAHUAN GANGGUAN JARINGAN - HM NET*
+=================================
+Yth. Pelanggan HM NET Kak *{nama}*,
+
+Kami menginformasikan bahwa saat ini sedang terjadi kendala / gangguan jaringan internet dengan rincian:
+• Area Terdampak: *{area_gangguan}* (Jalur PON {pon})
+• Kendala: {penyebab_gangguan}
+• Estimasi Perbaikan: *{estimasi_gangguan}*
+
+Tim teknisi lapangan kami sedang bekerja maksimal agar koneksi internet kembali normal secepatnya. Kami mohon maaf atas ketidaknyamanan ini. 🙏
+*HM NET - Akses Internet Rumahan*`,
+
+  maintenance:
+`*INFORMASI PEMELIHARAAN (MAINTENANCE) - HM NET*
+=================================
+Yth. Pelanggan HM NET Kak *{nama}*,
+
+Demi meningkatkan kualitas dan kestabilan layanan internet, kami akan melakukan pemeliharaan jaringan pada:
+• Area / Jalur: *{area_gangguan}* (Jalur PON {pon})
+• Pekerjaan: {penyebab_gangguan}
+• Estimasi Durasi: *{estimasi_gangguan}*
+
+Selama proses berlangsung, koneksi internet mungkin akan mengalami putus sementara. Mohon maaf atas ketidaknyamanan ini dan terima kasih atas pengertiannya. 🙏
+*HM NET - Akses Internet Rumahan*`,
+
+  normal:
+`*INFORMASI JARINGAN NORMAL KEMBALI - HM NET*
+=================================
+Halo Kak *{nama}*,
+
+Kabar baik! Proses perbaikan jaringan pada *{area_gangguan}* (Jalur PON {pon}) terkait *{penyebab_gangguan}* telah *SELESAI* dilaksanakan.
+
+Saat ini koneksi internet Wi-Fi HM NET sudah kembali *NORMAL* dan stabil. Jika koneksi di rumah Anda belum tersambung, silakan matikan lalu nyalakan ulang (restart) modem ONT Anda selama 10 detik.
+
+Terima kasih atas kesabaran dan kesetiaan Anda bersama *HM NET*! 🚀🙏`
+};
+
+// Temporary draft store when editing templates in Sub-tab 3
+let draftWaTemplates = null;
+
+function getWaTemplates() {
+  const raw = localStorage.getItem(STORAGE_KEYS.WA_TEMPLATES);
+  if (!raw) {
+    return JSON.parse(JSON.stringify(DEFAULT_WA_TEMPLATES));
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const merged = {
+      ...DEFAULT_WA_TEMPLATES,
+      ...parsed
+    };
+    // Auto-upgrade legacy template if it doesn't have {link_bayar} on its own line or still has old dummy bank accounts
+    if (!localStorage.getItem('hmnet_wa_tpl_rekening_v7')) {
+      merged.bankBca = DEFAULT_WA_TEMPLATES.bankBca;
+      merged.bankBri = DEFAULT_WA_TEMPLATES.bankBri;
+      merged.ewalletInfo = DEFAULT_WA_TEMPLATES.ewalletInfo;
+      merged.adminWa = DEFAULT_WA_TEMPLATES.adminWa;
+      merged.paymentInfo = DEFAULT_WA_TEMPLATES.paymentInfo;
+      merged.tagihan = DEFAULT_WA_TEMPLATES.tagihan;
+      merged.peringatan = DEFAULT_WA_TEMPLATES.peringatan;
+      localStorage.setItem('hmnet_wa_tpl_rekening_v7', '1');
+      saveWaTemplates(merged);
+    }
+    return merged;
+  } catch (e) {
+    return JSON.parse(JSON.stringify(DEFAULT_WA_TEMPLATES));
+  }
+}
+
+function saveWaTemplates(tpls) {
+  localStorage.setItem(STORAGE_KEYS.WA_TEMPLATES, JSON.stringify(tpls));
+}
+
+function getCustomerUniqueCode(custId) {
+  const idx = state.customers.findIndex(c => c.id === custId);
+  return idx !== -1 ? (idx + 1) : 1;
+}
+
+function getCustomerPayUrl(custId, year, month, custObj = null, billObj = null) {
+  const tpls = getWaTemplates();
+  let baseUrl = '';
+
+  if (tpls.publicDomain && tpls.publicDomain.trim().startsWith('http')) {
+    baseUrl = tpls.publicDomain.trim().replace(/\/+$/, '') + '/';
+  } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // Use localtest.me (which resolves to 127.0.0.1 and has a .me TLD) so WhatsApp ALWAYS turns the URL into a clickable blue link!
+    const portPart = window.location.port ? `:${window.location.port}` : '';
+    baseUrl = `${window.location.protocol}//localtest.me${portPart}${window.location.pathname}`;
+  } else {
+    baseUrl = window.location.origin + window.location.pathname;
+  }
+
+  const cid = encodeURIComponent(custId || 'c-1');
+  const y = year || state.selectedYear;
+  const m = month || state.selectedMonth;
+  const cust = custObj || state.customers.find(c => c.id === custId);
+  if (cust) {
+    const amt = billObj && billObj.status === 'SEBAGIAN'
+      ? Math.max(0, (Number(billObj.tariff) || cust.price) - (Number(billObj.amountPaid) || 0))
+      : (Number(billObj?.tariff) || cust.price || 150000);
+    return `${baseUrl}?pay=${cid}&y=${y}&m=${m}&name=${encodeURIComponent(cust.name)}&amt=${amt}&pkg=${encodeURIComponent(cust.speed || '10 Mbps')}&pon=${encodeURIComponent(cust.pon || '1')}`;
+  }
+  return `${baseUrl}?pay=${cid}&y=${y}&m=${m}`;
+}
+
+function compileWaTemplate(templateText, cust, bill, extra = {}) {
+  const tpls = extra.templatesOverride || getWaTemplates();
+  const y = extra.year || bill?.year || state.selectedYear;
+  const m = extra.month || bill?.month || state.selectedMonth;
+  const periodStr = `${MONTH_NAMES[(m || 1) - 1]} ${y}`;
+
+  const tariffNum = bill ? Number(bill.tariff) || Number(cust?.price) || 0 : Number(cust?.price) || 0;
+  const paidNum = bill ? Number(bill.amountPaid) || 0 : 0;
+  let remainingNum = (bill && bill.status === 'SEBAGIAN') ? Math.max(0, tariffNum - paidNum) : tariffNum;
+
+  const useUnique = extra.useUniqueCode !== undefined ? extra.useUniqueCode : tpls.useUniqueCode;
+  if (useUnique && cust?.id && (!bill || bill.status !== 'LUNAS')) {
+    remainingNum += getCustomerUniqueCode(cust.id);
+  }
+
+  const statusText = !bill || bill.status === 'BELUM'
+    ? 'BELUM DIBAYAR'
+    : bill.status === 'SEBAGIAN'
+      ? `BAYAR SEBAGIAN (Sisa ${formatRupiah(remainingNum)})`
+      : 'LUNAS';
+
+  const dueDay = (extra.dueDateDay !== undefined ? extra.dueDateDay : tpls.dueDateDay) || 'Tanggal 10';
+  const dueDateStr = `${dueDay} ${periodStr}`;
+  const rekeningStr = (extra.paymentInfo !== undefined ? extra.paymentInfo : tpls.paymentInfo) || DEFAULT_WA_TEMPLATES.paymentInfo;
+  const linkBayarStr = getCustomerPayUrl(cust?.id || 'c-1', y, m, cust, bill);
+
+  const areaGangguan = extra.areaGangguan || document.getElementById('outage-area-text')?.value || 'Seluruh Jalur Layanan HM NET';
+  const penyebabGangguan = extra.penyebabGangguan || document.getElementById('outage-cause-text')?.value || 'Perbaikan jalur kabel Fiber Optik';
+  const estimasiGangguan = extra.estimasiGangguan || document.getElementById('outage-eta-text')?.value || '1 - 2 Jam ke depan';
+
+  const catatanLine = bill?.notes ? `• Catatan: "${bill.notes}"\n` : '';
+
+  return String(templateText || '')
+    .replace(/\{nama\}/g, cust?.name || 'Pelanggan')
+    .replace(/\{periode\}/g, periodStr)
+    .replace(/\{paket\}/g, cust?.speed || '10 Mbps')
+    .replace(/\{tagihan\}/g, formatRupiah(remainingNum || tariffNum))
+    .replace(/\{dibayar\}/g, formatRupiah(paidNum || tariffNum))
+    .replace(/\{status\}/g, statusText)
+    .replace(/\{jatuh_tempo\}/g, dueDateStr)
+    .replace(/\{link_bayar\}/g, linkBayarStr)
+    .replace(/\{rekening\}/g, rekeningStr)
+    .replace(/\{tgl_bayar\}/g, bill?.paymentDate || new Date().toISOString().split('T')[0])
+    .replace(/\{metode_bayar\}/g, bill?.paymentMethod || 'Cash / Tunai')
+    .replace(/\{catatan\}/g, catatanLine)
+    .replace(/\{pon\}/g, cust?.pon || '1')
+    .replace(/\{sn\}/g, cust?.sn || '-')
+    .replace(/\{alamat\}/g, cust?.address || '-')
+    .replace(/\{area_gangguan\}/g, areaGangguan)
+    .replace(/\{penyebab_gangguan\}/g, penyebabGangguan)
+    .replace(/\{estimasi_gangguan\}/g, estimasiGangguan);
+}
+
+// =========================================================
+// NAVIGATION & SUB-TABS FOR BROADCAST & TEMPLATE WA
+// =========================================================
+function openBroadcastSubtab(subtab) {
+  state.broadcastSubtab = subtab || 'unpaid';
+  if (state.currentTab !== 'broadcast') {
+    switchTab('broadcast');
+  } else {
+    initBroadcastTab();
+  }
+}
+
+function initBroadcastTab() {
+  const subtab = state.broadcastSubtab || 'unpaid';
+
+  const subIds = ['unpaid', 'outage', 'templates'];
+  subIds.forEach(k => {
+    const panel = document.getElementById(`subtab-broadcast-${k}`);
+    const btn = document.getElementById(`btn-bcast-sub-${k}`);
+    if (panel) {
+      if (k === subtab) panel.classList.remove('hidden');
+      else panel.classList.add('hidden');
+    }
+    if (btn) {
+      if (k === subtab) {
+        if (k === 'outage') {
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 bg-rose-600 text-white shadow-xs';
+        } else if (k === 'templates') {
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 bg-brand-600 text-white shadow-xs';
+        } else {
+          btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 bg-emerald-600 text-white shadow-xs';
+        }
+      } else {
+        btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 text-slate-600 hover:text-slate-900 hover:bg-white/60';
+      }
+    }
+  });
+
+  if (subtab === 'unpaid') {
+    setUnpaidBroadcastTemplate(state.unpaidBroadcastTplKey || 'tagihan');
+    renderBroadcastUnpaidTable(true);
+  } else if (subtab === 'outage') {
+    setOutageBroadcastType(state.outageBroadcastTplKey || 'gangguan');
+    if (state.outageSelectedIds.size === 0) {
+      state.customers.filter(c => c.status !== 'BERHENTI').forEach(c => state.outageSelectedIds.add(c.id));
+    }
+    renderBroadcastOutageTable();
+  } else if (subtab === 'templates') {
+    initMasterTemplateEditor();
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// =========================================================
+// SUB-TAB 1: BROADCAST PESAN SERENTAK PELANGGAN BELUM BAYAR
+// =========================================================
+function setUnpaidBroadcastTemplate(tplKey) {
+  state.unpaidBroadcastTplKey = tplKey;
+  const tpls = getWaTemplates();
+
+  const btnTagihan = document.getElementById('btn-unpaid-tpl-tagihan');
+  const btnPeringatan = document.getElementById('btn-unpaid-tpl-peringatan');
+
+  if (btnTagihan && btnPeringatan) {
+    if (tplKey === 'tagihan') {
+      btnTagihan.className = 'p-2.5 rounded-xl border text-xs font-bold transition text-left flex items-center space-x-2 bg-emerald-50 text-emerald-900 border-emerald-400 shadow-2xs';
+      btnPeringatan.className = 'p-2.5 rounded-xl border text-xs font-semibold transition text-left flex items-center space-x-2 bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+    } else {
+      btnPeringatan.className = 'p-2.5 rounded-xl border text-xs font-bold transition text-left flex items-center space-x-2 bg-amber-50 text-amber-900 border-amber-400 shadow-2xs';
+      btnTagihan.className = 'p-2.5 rounded-xl border text-xs font-semibold transition text-left flex items-center space-x-2 bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+    }
+  }
+
+  const txtEl = document.getElementById('bcast-unpaid-template-text');
+  if (txtEl) {
+    txtEl.value = tpls[tplKey] || tpls.tagihan;
+  }
+
+  const sampleLinkEl = document.getElementById('bcast-unpaid-sample-link');
+  if (sampleLinkEl) {
+    const firstCust = state.customers[0];
+    const sampleUrl = getCustomerPayUrl(firstCust?.id || 'c-1', state.selectedYear, state.selectedMonth, firstCust);
+    sampleLinkEl.textContent = sampleUrl;
+    sampleLinkEl.href = sampleUrl;
+  }
+}
+
+function getUnpaidBroadcastPeriod() {
+  const yEl = document.getElementById('bcast-unpaid-year');
+  const mEl = document.getElementById('bcast-unpaid-month');
+  const y = yEl && yEl.value ? parseInt(yEl.value) : state.selectedYear;
+  const m = mEl && mEl.value ? parseInt(mEl.value) : state.selectedMonth;
+  return { y, m };
+}
+
+function getUnpaidCustomerRows() {
+  const { y, m } = getUnpaidBroadcastPeriod();
+  const statusFilter = document.getElementById('bcast-unpaid-status-filter')?.value || 'ALL_UNPAID';
+  const ponFilter = document.getElementById('bcast-unpaid-pon-filter')?.value || 'ALL';
+  const searchVal = (document.getElementById('bcast-unpaid-search')?.value || '').trim().toLowerCase();
+
+  const rows = [];
+  state.customers.forEach(cust => {
+    if (cust.status === 'BERHENTI') return;
+
+    const bill = state.bills.find(b => b.customerId === cust.id && b.year === y && b.month === m) || {
+      id: `bill-${cust.id}-${y}-${m}`,
+      customerId: cust.id,
+      year: y,
+      month: m,
+      tariff: cust.price,
+      amountPaid: 0,
+      status: 'BELUM',
+      paymentDate: '',
+      paymentMethod: '',
+      notes: ''
+    };
+
+    if (bill.status === 'LUNAS') return;
+    if (statusFilter === 'BELUM' && bill.status !== 'BELUM') return;
+    if (statusFilter === 'SEBAGIAN' && bill.status !== 'SEBAGIAN') return;
+    if (ponFilter !== 'ALL' && String(cust.pon) !== String(ponFilter)) return;
+
+    if (searchVal) {
+      const matchName = (cust.name || '').toLowerCase().includes(searchVal);
+      const matchPhone = (cust.phone || '').toLowerCase().includes(searchVal);
+      const matchAddr = (cust.address || '').toLowerCase().includes(searchVal);
+      if (!matchName && !matchPhone && !matchAddr) return;
+    }
+
+    const remaining = Math.max(0, (Number(bill.tariff) || Number(cust.price) || 0) - (Number(bill.amountPaid) || 0));
+    rows.push({ cust, bill, remaining, year: y, month: m });
+  });
+
+  return rows;
+}
+
+function renderBroadcastUnpaidTable(autoSelectInitial = false) {
+  const tbody = document.getElementById('tbody-bcast-unpaid');
+  if (!tbody) return;
+
+  const rows = getUnpaidCustomerRows();
+
+  // If initial open and nothing selected yet, auto-check all unpaid customers that have a phone number
+  if (autoSelectInitial && state.unpaidSelectedIds.size === 0) {
+    rows.forEach(r => {
+      if (r.cust.phone && r.cust.phone.trim().length >= 8) {
+        state.unpaidSelectedIds.add(r.cust.id);
+      }
+    });
+  }
+
+  tbody.innerHTML = '';
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-10 text-center text-slate-400">
+          <i data-lucide="check-circle-2" class="w-8 h-8 mx-auto mb-2 text-emerald-500 opacity-70"></i>
+          <div class="font-bold text-slate-700">Semua Pelanggan Sudah Lunas / Tidak Ada Data!</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">Tidak ditemukan pelanggan yang belum bayar pada filter periode ini.</div>
+        </td>
+      </tr>
+    `;
+    updateUnpaidSelectedSummary(rows);
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  rows.forEach(({ cust, bill, remaining, year, month }) => {
+    const isChecked = state.unpaidSelectedIds.has(cust.id);
+    const tr = document.createElement('tr');
+    tr.className = isChecked ? 'bg-emerald-50/40 hover:bg-emerald-50/70 transition' : 'hover:bg-slate-50 transition';
+
+    const statusBadge = bill.status === 'SEBAGIAN'
+      ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">CICIL / SEBAGIAN</span>'
+      : '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">BELUM BAYAR</span>';
+
+    tr.innerHTML = `
+      <td class="py-2.5 px-3 text-center">
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleUnpaidCustomerCheck('${cust.id}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+      </td>
+      <td class="py-2.5 px-3">
+        <div class="font-bold text-slate-900">${cust.name}</div>
+        <div class="text-[11px] text-slate-500">${cust.speed} • ${cust.address || '-'}</div>
+      </td>
+      <td class="py-2.5 px-2 text-center">
+        <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">PON ${cust.pon}</span>
+      </td>
+      <td class="py-2.5 px-3 text-right">
+        <div class="font-black text-rose-600">${formatRupiah(remaining)}</div>
+        <div class="mt-0.5">${statusBadge}</div>
+      </td>
+      <td class="py-2.5 px-3">
+        <input type="text" value="${cust.phone || ''}" onchange="updateCustomerPhoneInline('${cust.id}', this.value)" placeholder="Isi No WA (08...)" class="w-36 text-xs px-2.5 py-1.5 bg-white border ${cust.phone ? 'border-slate-300' : 'border-rose-400 bg-rose-50/30'} rounded-lg font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+      </td>
+      <td class="py-2.5 px-3 text-center">
+        <button type="button" onclick="openModalWhatsApp('${cust.id}', ${year}, ${month})" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition inline-flex items-center space-x-1" title="Kirim satuan / preview pesan">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+          <span>Satuan</span>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  updateUnpaidSelectedSummary(rows);
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleUnpaidCustomerCheck(custId, isChecked) {
+  if (isChecked) {
+    state.unpaidSelectedIds.add(custId);
+  } else {
+    state.unpaidSelectedIds.delete(custId);
+  }
+  renderBroadcastUnpaidTable(false);
+}
+
+function toggleSelectAllUnpaid(isChecked) {
+  const rows = getUnpaidCustomerRows();
+  rows.forEach(r => {
+    if (isChecked) state.unpaidSelectedIds.add(r.cust.id);
+    else state.unpaidSelectedIds.delete(r.cust.id);
+  });
+  renderBroadcastUnpaidTable(false);
+}
+
+function updateUnpaidSelectedSummary(rows) {
+  const currentRows = rows || getUnpaidCustomerRows();
+  let selectedCount = 0;
+  let selectedAmount = 0;
+
+  currentRows.forEach(r => {
+    if (state.unpaidSelectedIds.has(r.cust.id)) {
+      selectedCount++;
+      selectedAmount += r.remaining;
+    }
+  });
+
+  const countEl = document.getElementById('bcast-unpaid-selected-count');
+  const amountEl = document.getElementById('bcast-unpaid-selected-amount');
+  const btnCountEl = document.getElementById('btn-bcast-unpaid-count');
+  const headerChk = document.getElementById('chk-header-unpaid');
+
+  if (countEl) countEl.textContent = selectedCount;
+  if (amountEl) amountEl.textContent = formatRupiah(selectedAmount);
+  if (btnCountEl) btnCountEl.textContent = selectedCount;
+  if (headerChk) {
+    headerChk.checked = currentRows.length > 0 && selectedCount === currentRows.length;
+  }
+}
+
+function updateCustomerPhoneInline(custId, newPhone) {
+  const idx = state.customers.findIndex(c => c.id === custId);
+  if (idx !== -1) {
+    state.customers[idx].phone = (newPhone || '').trim();
+    saveCustomers();
+    renderTablePelanggan();
+    showToast(`Nomor WA ${state.customers[idx].name} disimpan!`);
+  }
+}
+
+function launchUnpaidBroadcastQueue() {
+  const rows = getUnpaidCustomerRows();
+  const selectedRows = rows.filter(r => state.unpaidSelectedIds.has(r.cust.id));
+
+  if (selectedRows.length === 0) {
+    alert('Silakan ceklis (centang) minimal 1 pelanggan yang belum bayar terlebih dahulu!');
+    return;
+  }
+
+  const missingPhone = selectedRows.filter(r => !r.cust.phone || r.cust.phone.replace(/[^0-9]/g, '').length < 8);
+  if (missingPhone.length > 0) {
+    const names = missingPhone.map(r => r.cust.name).join(', ');
+    if (selectedRows.length === missingPhone.length) {
+      alert(`Pelanggan yang Anda pilih (${names}) belum memiliki nomor WhatsApp! Silakan isi nomor WA pada kolom tabel terlebih dahulu.`);
+      return;
+    }
+    if (!confirm(`Terdapat ${missingPhone.length} pelanggan terpilih yang belum memiliki nomor WA (${names}) dan akan dilewati. Lanjutkan kirim ke ${selectedRows.length - missingPhone.length} pelanggan lainnya?`)) {
+      return;
+    }
+  }
+
+  const rawTpl = document.getElementById('bcast-unpaid-template-text')?.value || getWaTemplates()[state.unpaidBroadcastTplKey || 'tagihan'];
+  const queueItems = [];
+
+  selectedRows.forEach(({ cust, bill, remaining, year, month }) => {
+    const cleanPhone = formatCleanWaPhone(cust.phone);
+    if (!cleanPhone) return;
+
+    const msg = compileWaTemplate(rawTpl, cust, bill, { year, month });
+    queueItems.push({
+      custId: cust.id,
+      name: cust.name,
+      phoneRaw: cust.phone,
+      cleanPhone,
+      pon: cust.pon,
+      badgeText: `Tagihan: ${formatRupiah(remaining)}`,
+      message: msg,
+      status: 'PENDING'
+    });
+  });
+
+  const { y, m } = getUnpaidBroadcastPeriod();
+  openModalBroadcastQueue(
+    queueItems,
+    `Broadcast Tagihan Belum Bayar (${MONTH_NAMES[m - 1]} ${y})`,
+    `${queueItems.length} Pelanggan Terpilih Siap Dikirimi Pesan Tagihan`,
+    'emerald'
+  );
+}
+
+// =========================================================
+// SUB-TAB 2: BROADCAST PESAN SERENTAK INFORMASI GANGGUAN
+// =========================================================
+function setOutageBroadcastType(tplKey) {
+  state.outageBroadcastTplKey = tplKey;
+
+  ['gangguan', 'maintenance', 'normal'].forEach(k => {
+    const btn = document.getElementById(`btn-outage-tpl-${k}`);
+    if (!btn) return;
+    if (k === tplKey) {
+      if (k === 'normal') {
+        btn.className = 'p-2 rounded-xl border text-xs font-bold transition text-center bg-emerald-50 text-emerald-900 border-emerald-400 shadow-2xs';
+      } else if (k === 'maintenance') {
+        btn.className = 'p-2 rounded-xl border text-xs font-bold transition text-center bg-amber-50 text-amber-900 border-amber-400 shadow-2xs';
+      } else {
+        btn.className = 'p-2 rounded-xl border text-xs font-bold transition text-center bg-rose-50 text-rose-900 border-rose-400 shadow-2xs';
+      }
+    } else {
+      btn.className = 'p-2 rounded-xl border text-xs font-semibold transition text-center bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+    }
+  });
+
+  refreshOutageTemplateText();
+}
+
+function onOutageScopeChange() {
+  const scope = document.getElementById('outage-target-scope')?.value || 'ALL';
+  const areaInput = document.getElementById('outage-area-text');
+  const ponFilter = document.getElementById('bcast-outage-pon-filter');
+
+  state.outageSelectedIds.clear();
+
+  if (scope === 'ALL') {
+    if (areaInput) areaInput.value = 'Seluruh Jalur Layanan HM NET';
+    if (ponFilter) ponFilter.value = 'ALL';
+    state.customers.filter(c => c.status !== 'BERHENTI').forEach(c => state.outageSelectedIds.add(c.id));
+  } else if (scope.startsWith('PON_')) {
+    const ponNum = scope.replace('PON_', '');
+    if (areaInput) areaInput.value = `Jalur Distribusi PON ${ponNum}`;
+    if (ponFilter) ponFilter.value = ponNum;
+    state.customers.filter(c => c.status !== 'BERHENTI' && String(c.pon) === String(ponNum)).forEach(c => state.outageSelectedIds.add(c.id));
+  } else if (scope === 'REDAMAN_KRITIS') {
+    if (areaInput) areaInput.value = 'Jalur Kabel Dropcore / Redaman Optik Kritis';
+    if (ponFilter) ponFilter.value = 'ALL';
+    state.customers.filter(c => c.status !== 'BERHENTI' && parseFloat(c.redaman) < -27).forEach(c => state.outageSelectedIds.add(c.id));
+  }
+
+  refreshOutageTemplateText();
+  renderBroadcastOutageTable();
+}
+
+function setOutageQuickCause(text) {
+  const el = document.getElementById('outage-cause-text');
+  if (el) {
+    el.value = text;
+    refreshOutageTemplateText();
+  }
+}
+
+function setOutageQuickEta(text) {
+  const el = document.getElementById('outage-eta-text');
+  if (el) {
+    el.value = text;
+    refreshOutageTemplateText();
+  }
+}
+
+function refreshOutageTemplateText() {
+  const tplKey = state.outageBroadcastTplKey || 'gangguan';
+  const tpls = getWaTemplates();
+  const txtEl = document.getElementById('bcast-outage-template-text');
+  if (txtEl) {
+    txtEl.value = tpls[tplKey] || DEFAULT_WA_TEMPLATES[tplKey];
+  }
+}
+
+function getOutageFilteredCustomers() {
+  const ponFilter = document.getElementById('bcast-outage-pon-filter')?.value || 'ALL';
+  const searchVal = (document.getElementById('bcast-outage-search')?.value || '').trim().toLowerCase();
+
+  return state.customers.filter(cust => {
+    if (cust.status === 'BERHENTI') return false;
+    if (ponFilter !== 'ALL' && String(cust.pon) !== String(ponFilter)) return false;
+    if (searchVal) {
+      const mName = (cust.name || '').toLowerCase().includes(searchVal);
+      const mAddr = (cust.address || '').toLowerCase().includes(searchVal);
+      const mSn = (cust.sn || '').toLowerCase().includes(searchVal);
+      const mPhone = (cust.phone || '').toLowerCase().includes(searchVal);
+      if (!mName && !mAddr && !mSn && !mPhone) return false;
+    }
+    return true;
+  });
+}
+
+function renderBroadcastOutageTable() {
+  const tbody = document.getElementById('tbody-bcast-outage');
+  if (!tbody) return;
+
+  const list = getOutageFilteredCustomers();
+  tbody.innerHTML = '';
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="py-8 text-center text-slate-400">
+          Tidak ada pelanggan yang sesuai dengan filter pencarian.
+        </td>
+      </tr>
+    `;
+    updateOutageSelectedSummary(list);
+    return;
+  }
+
+  list.forEach(cust => {
+    const isChecked = state.outageSelectedIds.has(cust.id);
+    const redamanInfo = getRedamanClassification(cust.redaman);
+    const tr = document.createElement('tr');
+    tr.className = isChecked ? 'bg-rose-50/40 hover:bg-rose-50/70 transition' : 'hover:bg-slate-50 transition';
+
+    tr.innerHTML = `
+      <td class="py-2.5 px-3 text-center">
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleOutageCustomerCheck('${cust.id}', this.checked)" class="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer">
+      </td>
+      <td class="py-2.5 px-3">
+        <div class="font-bold text-slate-900">${cust.name}</div>
+        <div class="text-[11px] text-slate-500">${cust.address || '-'} • SN: <span class="font-mono">${cust.sn || '-'}</span></div>
+      </td>
+      <td class="py-2.5 px-2 text-center">
+        <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">PON ${cust.pon}</span>
+      </td>
+      <td class="py-2.5 px-3 text-center">
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${redamanInfo.badgeClass}">${cust.redaman} dB (${redamanInfo.label})</span>
+      </td>
+      <td class="py-2.5 px-3">
+        <input type="text" value="${cust.phone || ''}" onchange="updateCustomerPhoneInline('${cust.id}', this.value)" placeholder="Isi No WA (08...)" class="w-36 text-xs px-2.5 py-1.5 bg-white border ${cust.phone ? 'border-slate-300' : 'border-rose-400 bg-rose-50/30'} rounded-lg font-mono font-bold text-slate-800 focus:ring-2 focus:ring-rose-500 focus:outline-none">
+      </td>
+      <td class="py-2.5 px-3 text-center">
+        <button type="button" onclick="sendSingleOutageWa('${cust.id}')" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold transition inline-flex items-center space-x-1" title="Kirim info gangguan ke pelanggan ini saja">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Satuan</span>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  updateOutageSelectedSummary(list);
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleOutageCustomerCheck(custId, isChecked) {
+  if (isChecked) state.outageSelectedIds.add(custId);
+  else state.outageSelectedIds.delete(custId);
+  renderBroadcastOutageTable();
+}
+
+function toggleSelectAllOutage(isChecked) {
+  const list = getOutageFilteredCustomers();
+  list.forEach(c => {
+    if (isChecked) state.outageSelectedIds.add(c.id);
+    else state.outageSelectedIds.delete(c.id);
+  });
+  renderBroadcastOutageTable();
+}
+
+function selectOutageCriticalOnly() {
+  state.outageSelectedIds.clear();
+  state.customers.forEach(c => {
+    if (c.status !== 'BERHENTI' && parseFloat(c.redaman) < -27) {
+      state.outageSelectedIds.add(c.id);
+    }
+  });
+  renderBroadcastOutageTable();
+  showToast('Pelanggan dengan redaman kritis (< -27 dB) telah diceklis!');
+}
+
+function updateOutageSelectedSummary(list) {
+  const currentList = list || getOutageFilteredCustomers();
+  const totalSelected = state.customers.filter(c => c.status !== 'BERHENTI' && state.outageSelectedIds.has(c.id)).length;
+  const visibleSelected = currentList.filter(c => state.outageSelectedIds.has(c.id)).length;
+
+  const countEl = document.getElementById('bcast-outage-selected-count');
+  const btnCountEl = document.getElementById('btn-bcast-outage-count');
+  const headerChk = document.getElementById('chk-header-outage');
+
+  if (countEl) countEl.textContent = totalSelected;
+  if (btnCountEl) btnCountEl.textContent = totalSelected;
+  if (headerChk) {
+    headerChk.checked = currentList.length > 0 && visibleSelected === currentList.length;
+  }
+}
+
+function sendSingleOutageWa(custId) {
+  const cust = state.customers.find(c => c.id === custId);
+  if (!cust) return;
+
+  const cleanPhone = formatCleanWaPhone(cust.phone);
+  if (!cleanPhone) {
+    alert(`Pelanggan "${cust.name}" belum memiliki nomor WhatsApp yang valid! Silakan ketik nomor WA pada kolom tabel terlebih dahulu.`);
+    return;
+  }
+
+  const rawTpl = document.getElementById('bcast-outage-template-text')?.value || getWaTemplates()[state.outageBroadcastTplKey || 'gangguan'];
+  const areaGangguan = document.getElementById('outage-area-text')?.value || 'Seluruh Jalur Layanan HM NET';
+  const penyebabGangguan = document.getElementById('outage-cause-text')?.value || 'Perbaikan jaringan Fiber Optik';
+  const estimasiGangguan = document.getElementById('outage-eta-text')?.value || '1 - 2 Jam ke depan';
+
+  const msg = compileWaTemplate(rawTpl, cust, null, {
+    areaGangguan,
+    penyebabGangguan,
+    estimasiGangguan
+  });
+
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  showToast(`Membuka WhatsApp info gangguan ke ${cust.name}...`);
+}
+
+function launchOutageBroadcastQueue() {
+  const selectedCustomers = state.customers.filter(c => c.status !== 'BERHENTI' && state.outageSelectedIds.has(c.id));
+
+  if (selectedCustomers.length === 0) {
+    alert('Silakan ceklis (centang) minimal 1 pelanggan yang akan dikirimi informasi gangguan!');
+    return;
+  }
+
+  const rawTpl = document.getElementById('bcast-outage-template-text')?.value || getWaTemplates()[state.outageBroadcastTplKey || 'gangguan'];
+  const areaGangguan = document.getElementById('outage-area-text')?.value || 'Seluruh Jalur Layanan HM NET';
+  const penyebabGangguan = document.getElementById('outage-cause-text')?.value || 'Perbaikan jaringan Fiber Optik';
+  const estimasiGangguan = document.getElementById('outage-eta-text')?.value || '1 - 2 Jam ke depan';
+
+  const queueItems = [];
+  selectedCustomers.forEach(cust => {
+    const cleanPhone = formatCleanWaPhone(cust.phone);
+    if (!cleanPhone) return;
+
+    const msg = compileWaTemplate(rawTpl, cust, null, {
+      areaGangguan,
+      penyebabGangguan,
+      estimasiGangguan
+    });
+
+    queueItems.push({
+      custId: cust.id,
+      name: cust.name,
+      phoneRaw: cust.phone,
+      cleanPhone,
+      pon: cust.pon,
+      badgeText: `PON ${cust.pon} • ${cust.redaman} dB`,
+      message: msg,
+      status: 'PENDING'
+    });
+  });
+
+  if (queueItems.length === 0) {
+    alert('Pelanggan yang diceklis belum memiliki nomor WhatsApp! Silakan isi nomor WA pada kolom tabel terlebih dahulu.');
+    return;
+  }
+
+  const titleLabels = {
+    gangguan: 'Broadcast Informasi Gangguan Jaringan',
+    maintenance: 'Broadcast Informasi Maintenance Jaringan',
+    normal: 'Broadcast Informasi Jaringan Normal Kembali'
+  };
+
+  openModalBroadcastQueue(
+    queueItems,
+    titleLabels[state.outageBroadcastTplKey || 'gangguan'],
+    `Area: ${areaGangguan} • ${queueItems.length} Pelanggan Terpilih`,
+    'rose'
+  );
+}
+
+// =========================================================
+// SUB-TAB 3: MENU KHUSUS UBAH TEMPLATE PESAN & REKENING WA
+// =========================================================
+function initMasterTemplateEditor() {
+  draftWaTemplates = getWaTemplates();
+
+  const payInfoEl = document.getElementById('tpl-payment-info');
+  const dueDayEl = document.getElementById('tpl-due-date-day');
+  const fonnteEl = document.getElementById('tpl-fonnte-token');
+  const bcaEl = document.getElementById('tpl-bank-bca');
+  const briEl = document.getElementById('tpl-bank-bri');
+  const ewalletEl = document.getElementById('tpl-ewallet-info');
+  const adminWaEl = document.getElementById('tpl-admin-wa');
+  const publicDomEl = document.getElementById('tpl-public-domain');
+  const uniqueChk = document.getElementById('tpl-use-unique-code');
+  const qrisHint = document.getElementById('tpl-qris-status-hint');
+
+  if (payInfoEl) payInfoEl.value = draftWaTemplates.paymentInfo || '';
+  if (dueDayEl) dueDayEl.value = draftWaTemplates.dueDateDay || 'Tanggal 10';
+  if (fonnteEl) fonnteEl.value = draftWaTemplates.fonnteToken || '';
+  if (bcaEl) bcaEl.value = draftWaTemplates.bankBca || DEFAULT_WA_TEMPLATES.bankBca;
+  if (briEl) briEl.value = draftWaTemplates.bankBri || DEFAULT_WA_TEMPLATES.bankBri;
+  if (ewalletEl) ewalletEl.value = draftWaTemplates.ewalletInfo || DEFAULT_WA_TEMPLATES.ewalletInfo;
+  if (adminWaEl) adminWaEl.value = draftWaTemplates.adminWa || DEFAULT_WA_TEMPLATES.adminWa;
+  if (publicDomEl) publicDomEl.value = draftWaTemplates.publicDomain || '';
+  if (uniqueChk) uniqueChk.checked = !!draftWaTemplates.useUniqueCode;
+  if (qrisHint) {
+    qrisHint.textContent = draftWaTemplates.qrisImageDataUrl
+      ? '✅ Gambar QRIS kustom HM NET sudah terpasang dan siap ditampilkan ke pelanggan.'
+      : 'Jika belum di-upload, halaman link bayar otomatis menampilkan QRIS interaktif HM NET.';
+  }
+
+  selectMasterTemplateEditor(state.masterTemplateEditingKey || 'tagihan');
+}
+
+function handleUploadQrisImage(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    if (!draftWaTemplates) draftWaTemplates = getWaTemplates();
+    draftWaTemplates.qrisImageDataUrl = e.target.result;
+    saveWaTemplates(draftWaTemplates);
+    const qrisHint = document.getElementById('tpl-qris-status-hint');
+    if (qrisHint) {
+      qrisHint.textContent = '✅ Gambar QRIS kustom HM NET berhasil di-upload dan disimpan!';
+    }
+    showToast('Gambar Barcode QRIS HM NET berhasil disimpan!');
+  };
+  reader.readAsDataURL(file);
+}
+
+function selectMasterTemplateEditor(tplKey) {
+  if (!draftWaTemplates) draftWaTemplates = getWaTemplates();
+  state.masterTemplateEditingKey = tplKey;
+
+  const keys = ['tagihan', 'peringatan', 'lunas', 'gangguan', 'maintenance', 'normal'];
+  const titles = {
+    tagihan: 'Isi Template: 📢 1. Tagihan Baru',
+    peringatan: 'Isi Template: ⚠️ 2. Pengingat Jatuh Tempo & Isolir',
+    lunas: 'Isi Template: 🧾 3. Kuitansi Pembayaran Lunas',
+    gangguan: 'Isi Template: 🚨 4. Informasi Gangguan Jaringan',
+    maintenance: 'Isi Template: 🔧 5. Informasi Maintenance Terjadwal',
+    normal: 'Isi Template: ✅ 6. Informasi Jaringan Normal Kembali'
+  };
+
+  keys.forEach(k => {
+    const btn = document.getElementById(`btn-master-tpl-${k}`);
+    if (!btn) return;
+    if (k === tplKey) {
+      btn.className = 'p-2.5 rounded-xl border text-xs font-bold transition text-left bg-brand-50 text-brand-900 border-brand-400 shadow-2xs';
+    } else {
+      btn.className = 'p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+    }
+  });
+
+  const lbl = document.getElementById('lbl-master-tpl-active');
+  if (lbl) lbl.textContent = titles[tplKey] || 'Isi Template';
+
+  const editor = document.getElementById('tpl-master-editor');
+  if (editor) {
+    editor.value = draftWaTemplates[tplKey] || DEFAULT_WA_TEMPLATES[tplKey] || '';
+  }
+
+  updateMasterTemplateLivePreview();
+}
+
+function onMasterTemplateInput() {
+  if (!draftWaTemplates) draftWaTemplates = getWaTemplates();
+  const key = state.masterTemplateEditingKey || 'tagihan';
+  const editor = document.getElementById('tpl-master-editor');
+  const payInfoEl = document.getElementById('tpl-payment-info');
+  const dueDayEl = document.getElementById('tpl-due-date-day');
+  const bcaEl = document.getElementById('tpl-bank-bca');
+  const briEl = document.getElementById('tpl-bank-bri');
+  const ewalletEl = document.getElementById('tpl-ewallet-info');
+  const adminWaEl = document.getElementById('tpl-admin-wa');
+  const publicDomEl = document.getElementById('tpl-public-domain');
+  const uniqueChk = document.getElementById('tpl-use-unique-code');
+
+  if (editor) draftWaTemplates[key] = editor.value;
+  if (payInfoEl) draftWaTemplates.paymentInfo = payInfoEl.value;
+  if (dueDayEl) draftWaTemplates.dueDateDay = dueDayEl.value;
+  if (bcaEl) draftWaTemplates.bankBca = bcaEl.value;
+  if (briEl) draftWaTemplates.bankBri = briEl.value;
+  if (ewalletEl) draftWaTemplates.ewalletInfo = ewalletEl.value;
+  if (adminWaEl) draftWaTemplates.adminWa = adminWaEl.value;
+  if (publicDomEl) draftWaTemplates.publicDomain = publicDomEl.value;
+  if (uniqueChk) draftWaTemplates.useUniqueCode = uniqueChk.checked;
+
+  updateMasterTemplateLivePreview();
+}
+
+function insertTemplateVar(token) {
+  const editor = document.getElementById('tpl-master-editor');
+  if (!editor) return;
+
+  const start = editor.selectionStart || 0;
+  const end = editor.selectionEnd || 0;
+  const val = editor.value;
+
+  editor.value = val.substring(0, start) + token + val.substring(end);
+  editor.focus();
+  editor.selectionStart = editor.selectionEnd = start + token.length;
+
+  onMasterTemplateInput();
+}
+
+function updateMasterTemplateLivePreview() {
+  const previewEl = document.getElementById('tpl-master-live-preview');
+  if (!previewEl) return;
+
+  const sampleCust = state.customers[0] || {
+    id: 'c-1',
+    name: 'Falah',
+    speed: '20 Mbps',
+    price: 150000,
+    pon: '2',
+    sn: 'ZTEGd3be73c7',
+    address: 'Jl. Utama RT 01 RW 01'
+  };
+
+  const sampleBill = {
+    year: state.selectedYear,
+    month: state.selectedMonth,
+    tariff: sampleCust.price || 150000,
+    amountPaid: state.masterTemplateEditingKey === 'lunas' ? (sampleCust.price || 150000) : 0,
+    status: state.masterTemplateEditingKey === 'lunas' ? 'LUNAS' : 'BELUM',
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'Transfer BCA',
+    notes: ''
+  };
+
+  const key = state.masterTemplateEditingKey || 'tagihan';
+  const rawTpl = draftWaTemplates?.[key] || '';
+
+  const compiled = compileWaTemplate(rawTpl, sampleCust, sampleBill, {
+    year: state.selectedYear,
+    month: state.selectedMonth,
+    templatesOverride: draftWaTemplates,
+    areaGangguan: 'Jalur Distribusi PON 2',
+    penyebabGangguan: 'Putus kabel Fiber Optik jalur distribusi',
+    estimasiGangguan: '1 - 2 Jam ke depan'
+  });
+
+  // Render any URL inside live preview as a real clickable blue link
+  const escaped = compiled
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  previewEl.innerHTML = escaped.replace(
+    /(https?:\/\/[^\s]+)/g,
+    `<a href="$1" onclick="openCustomerPayPortal('${sampleCust.id}', ${state.selectedYear}, ${state.selectedMonth}); return false;" class="text-blue-600 hover:text-blue-800 underline font-extrabold cursor-pointer" title="Klik untuk membuka Halaman Link Pembayaran Pelanggan">$1</a>`
+  );
+}
+
+function saveAllWaTemplates() {
+  if (!draftWaTemplates) draftWaTemplates = getWaTemplates();
+
+  const key = state.masterTemplateEditingKey || 'tagihan';
+  const editor = document.getElementById('tpl-master-editor');
+  const payInfoEl = document.getElementById('tpl-payment-info');
+  const dueDayEl = document.getElementById('tpl-due-date-day');
+  const fonnteEl = document.getElementById('tpl-fonnte-token');
+  const bcaEl = document.getElementById('tpl-bank-bca');
+  const briEl = document.getElementById('tpl-bank-bri');
+  const ewalletEl = document.getElementById('tpl-ewallet-info');
+  const adminWaEl = document.getElementById('tpl-admin-wa');
+  const publicDomEl = document.getElementById('tpl-public-domain');
+  const uniqueChk = document.getElementById('tpl-use-unique-code');
+
+  if (editor) draftWaTemplates[key] = editor.value;
+  if (payInfoEl) draftWaTemplates.paymentInfo = payInfoEl.value.trim();
+  if (dueDayEl) draftWaTemplates.dueDateDay = dueDayEl.value.trim() || 'Tanggal 10';
+  if (fonnteEl) draftWaTemplates.fonnteToken = fonnteEl.value.trim();
+  if (bcaEl) draftWaTemplates.bankBca = bcaEl.value.trim();
+  if (briEl) draftWaTemplates.bankBri = briEl.value.trim();
+  if (ewalletEl) draftWaTemplates.ewalletInfo = ewalletEl.value.trim();
+  if (adminWaEl) draftWaTemplates.adminWa = adminWaEl.value.trim();
+  if (publicDomEl) draftWaTemplates.publicDomain = publicDomEl.value.trim();
+  if (uniqueChk) draftWaTemplates.useUniqueCode = uniqueChk.checked;
+
+  saveWaTemplates(draftWaTemplates);
+
+  // Sync payment info box inside single WA modal as well
+  const payInfoBox = document.getElementById('wa-modal-payment-info-content');
+  if (payInfoBox && draftWaTemplates.paymentInfo) {
+    payInfoBox.textContent = draftWaTemplates.paymentInfo;
+  }
+
+  showToast('Semua pengaturan template, rekening & link pembayaran berhasil disimpan! ✅');
+}
+
+function resetWaTemplatesToDefault() {
+  if (confirm('Yakin ingin mengembalikan seluruh template pesan WhatsApp dan info rekening ke format bawaan HM NET?')) {
+    draftWaTemplates = JSON.parse(JSON.stringify(DEFAULT_WA_TEMPLATES));
+    saveWaTemplates(draftWaTemplates);
+    initMasterTemplateEditor();
+    showToast('Template pesan WhatsApp berhasil di-reset ke bawaan awal.');
+  }
+}
+
+// =========================================================
+// PORTAL PEMBAYARAN MANDIRI PELANGGAN (KLIK LINK & CATAT OTOMATIS)
+// =========================================================
+let cpayState = {
+  custId: null,
+  year: 2026,
+  month: 11,
+  selectedMethod: 'QRIS',
+  computedAmount: 0
+};
+
+function openCustomerPayPortalFromWaModal() {
+  const custId = document.getElementById('wa-customer-id')?.value;
+  const y = parseInt(document.getElementById('wa-year')?.value) || state.selectedYear;
+  const m = parseInt(document.getElementById('wa-month')?.value) || state.selectedMonth;
+  closeModalWhatsApp();
+  openCustomerPayPortal(custId, y, m);
+}
+
+function openCustomerPayPortal(custId = null, year = null, month = null) {
+  if (!state.customers || state.customers.length === 0) {
+    loadData();
+  }
+
+  const targetYear = year ? parseInt(year) : state.selectedYear;
+  const targetMonth = month ? parseInt(month) : state.selectedMonth;
+  let targetCust = custId ? state.customers.find(c => c.id === custId) : null;
+  if (!targetCust) {
+    targetCust = state.customers[0];
+  }
+
+  cpayState.custId = targetCust ? targetCust.id : null;
+  cpayState.year = targetYear;
+  cpayState.month = targetMonth;
+  cpayState.selectedMethod = cpayState.selectedMethod || 'QRIS';
+
+  // Populate dropdowns in portal
+  const custSelect = document.getElementById('cpay-select-customer');
+  const monthSelect = document.getElementById('cpay-select-month');
+  const yearSelect = document.getElementById('cpay-select-year');
+
+  if (custSelect) {
+    custSelect.innerHTML = '';
+    state.customers.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${c.name} — Paket ${c.speed} (PON ${c.pon})`;
+      if (c.id === cpayState.custId) opt.selected = true;
+      custSelect.appendChild(opt);
+    });
+  }
+
+  if (monthSelect) {
+    monthSelect.innerHTML = '';
+    MONTH_NAMES.forEach((mName, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx + 1;
+      opt.textContent = mName;
+      if (idx + 1 === cpayState.month) opt.selected = true;
+      monthSelect.appendChild(opt);
+    });
+  }
+
+  if (yearSelect) {
+    yearSelect.innerHTML = '';
+    [2025, 2026, 2027].forEach(yr => {
+      const opt = document.createElement('option');
+      opt.value = yr;
+      opt.textContent = `Tahun ${yr}`;
+      if (yr === cpayState.year) opt.selected = true;
+      yearSelect.appendChild(opt);
+    });
+  }
+
+  // Hide login & app views, show customer payment portal
+  document.getElementById('view-login')?.classList.add('hidden');
+  document.getElementById('view-app')?.classList.add('hidden');
+  document.getElementById('view-customer-pay')?.classList.remove('hidden');
+
+  const backLabel = document.getElementById('btn-cpay-back-label');
+  if (backLabel) {
+    backLabel.textContent = state.currentUser ? 'Kembali ke Dashboard Admin' : 'Halaman Login';
+  }
+
+  renderCustomerPayPortal();
+}
+
+function closeCustomerPayPortal() {
+  document.getElementById('view-customer-pay')?.classList.add('hidden');
+  // Clear ?pay= query param cleanly without reloading
+  if (window.location.search) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  if (state.currentUser) {
+    document.getElementById('view-app')?.classList.remove('hidden');
+    renderDashboard();
+    renderGridTagihan();
+    if (state.currentTab === 'broadcast') renderBroadcastUnpaidTable();
+  } else {
+    document.getElementById('view-login')?.classList.remove('hidden');
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function onCustomerPaySelectChange() {
+  const cid = document.getElementById('cpay-select-customer')?.value;
+  const m = parseInt(document.getElementById('cpay-select-month')?.value) || state.selectedMonth;
+  const y = parseInt(document.getElementById('cpay-select-year')?.value) || state.selectedYear;
+  cpayState.custId = cid;
+  cpayState.month = m;
+  cpayState.year = y;
+  renderCustomerPayPortal();
+}
+
+function renderCustomerPayPortal() {
+  const cust = state.customers.find(c => c.id === cpayState.custId) || state.customers[0];
+  if (!cust) return;
+
+  const y = cpayState.year;
+  const m = cpayState.month;
+  const periodStr = `${MONTH_NAMES[m - 1]} ${y}`;
+
+  let bill = state.bills.find(b => b.customerId === cust.id && b.year === y && b.month === m);
+  if (!bill) {
+    bill = {
+      id: `bill-${cust.id}-${y}-${m}`,
+      customerId: cust.id,
+      year: y,
+      month: m,
+      tariff: cust.price,
+      amountPaid: 0,
+      status: 'BELUM',
+      paymentDate: '',
+      paymentMethod: '',
+      notes: ''
+    };
+  }
+
+  const tpls = getWaTemplates();
+  const baseRemaining = bill.status === 'SEBAGIAN'
+    ? Math.max(0, (Number(bill.tariff) || cust.price) - (Number(bill.amountPaid) || 0))
+    : (Number(bill.tariff) || cust.price);
+
+  const uniqueAdd = (tpls.useUniqueCode && bill.status !== 'LUNAS') ? getCustomerUniqueCode(cust.id) : 0;
+  cpayState.computedAmount = baseRemaining + uniqueAdd;
+
+  // Populate Header Info
+  document.getElementById('cpay-cust-name').textContent = cust.name;
+  document.getElementById('cpay-cust-meta').textContent = `Paket ${cust.speed} • Jalur PON ${cust.pon} • Periode ${periodStr}`;
+  document.getElementById('cpay-total-amount').textContent = formatRupiah(bill.status === 'LUNAS' ? (bill.amountPaid || bill.tariff) : cpayState.computedAmount);
+
+  const hintEl = document.getElementById('cpay-unique-code-hint');
+  if (hintEl) {
+    hintEl.textContent = uniqueAdd > 0
+      ? `Termasuk kode unik pelanggan (+Rp ${uniqueAdd}) agar verifikasi otomatis`
+      : `Tagihan resmi internet Wi-Fi HM NET periode ${periodStr}`;
+  }
+
+  const statusBadge = document.getElementById('cpay-status-badge');
+  const unpaidSec = document.getElementById('cpay-unpaid-section');
+  const paidSec = document.getElementById('cpay-paid-section');
+
+  if (bill.status === 'LUNAS') {
+    if (statusBadge) {
+      statusBadge.textContent = 'SUDAH LUNAS ✅';
+      statusBadge.className = 'px-3 py-1 rounded-xl text-xs font-black uppercase bg-white text-emerald-800 shadow-sm';
+    }
+    unpaidSec?.classList.add('hidden');
+    paidSec?.classList.remove('hidden');
+
+    document.getElementById('cpay-receipt-name').textContent = `${cust.name} (PON ${cust.pon})`;
+    document.getElementById('cpay-receipt-period').textContent = `${periodStr} (${cust.speed})`;
+    document.getElementById('cpay-receipt-amount').textContent = formatRupiah(bill.amountPaid || bill.tariff);
+    document.getElementById('cpay-receipt-method').textContent = bill.paymentMethod || 'Transfer / Online';
+    document.getElementById('cpay-receipt-date').textContent = bill.paymentDate || new Date().toISOString().split('T')[0];
+  } else {
+    if (statusBadge) {
+      statusBadge.textContent = bill.status === 'SEBAGIAN' ? 'BAYAR SEBAGIAN' : 'BELUM LUNAS';
+      statusBadge.className = 'px-3 py-1 rounded-xl text-xs font-black uppercase bg-rose-500 text-white shadow-sm';
+    }
+    unpaidSec?.classList.remove('hidden');
+    paidSec?.classList.add('hidden');
+    selectCustomerPayMethod(cpayState.selectedMethod || 'QRIS');
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function selectCustomerPayMethod(method) {
+  cpayState.selectedMethod = method;
+
+  const mapBtn = {
+    'QRIS': 'btn-cpay-method-qris',
+    'Transfer Mandiri': 'btn-cpay-method-bca',
+    'Transfer BRI': 'btn-cpay-method-bri',
+    'DANA / LinkAja': 'btn-cpay-method-ewallet',
+    'Cash / Tunai': 'btn-cpay-method-cash'
+  };
+
+  Object.entries(mapBtn).forEach(([mKey, btnId]) => {
+    const el = document.getElementById(btnId);
+    if (!el) return;
+    const isCash = mKey === 'Cash / Tunai';
+    const colSpanClass = isCash ? ' col-span-2 sm:col-span-2' : '';
+    if (mKey === method) {
+      el.className = `p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between bg-emerald-50 border-emerald-500 text-emerald-950 shadow-2xs${colSpanClass}`;
+    } else {
+      el.className = `p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-white border-slate-200 hover:bg-slate-50 text-slate-800${colSpanClass}`;
+    }
+  });
+
+  const box = document.getElementById('cpay-method-instruction-box');
+  if (!box) return;
+
+  const tpls = getWaTemplates();
+  const mandiriStr = tpls.bankBca || DEFAULT_WA_TEMPLATES.bankBca;
+  const briStr = tpls.bankBri || DEFAULT_WA_TEMPLATES.bankBri;
+  const ewalletStr = tpls.ewalletInfo || DEFAULT_WA_TEMPLATES.ewalletInfo;
+  const amountFormatted = formatRupiah(cpayState.computedAmount);
+
+  if (method === 'QRIS') {
+    const qrImgHtml = tpls.qrisImageDataUrl
+      ? `<img src="${tpls.qrisImageDataUrl}" alt="QRIS HM NET" class="w-48 h-48 object-contain mx-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xs">`
+      : `<div class="w-48 h-48 mx-auto rounded-2xl border-2 border-slate-800 bg-white p-3 flex flex-col items-center justify-between shadow-xs">
+           <div class="w-full flex items-center justify-between border-b border-slate-200 pb-1">
+             <span class="text-[10px] font-black tracking-tighter text-slate-900">QRIS</span>
+             <span class="text-[9px] font-bold text-emerald-700">HM NET OFFICIAL</span>
+           </div>
+           <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(`HMNET-PAY-${cpayState.custId}-${cpayState.computedAmount}`)}" alt="QRIS Code" class="w-28 h-28 object-contain">
+           <div class="text-[9px] font-bold text-slate-500">NMID: ID2026HMNET001</div>
+         </div>`;
+
+    box.innerHTML = `
+      <div class="text-center space-y-2">
+        <div class="text-xs font-black text-slate-900">Scan Barcode QRIS Resmi HM NET</div>
+        ${qrImgHtml}
+        <div class="text-[11px] text-slate-600">
+          Buka aplikasi <strong>Livin' Mandiri, BRImo, DANA, LinkAja, BCA Mobile, GoPay, atau OVO</strong> lalu scan QRIS di atas sebesar <strong class="text-emerald-700">${amountFormatted}</strong>.
+        </div>
+        <div class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 py-1 px-2.5 rounded-lg inline-block border border-emerald-200">
+          Uang langsung masuk ke rekening resmi HM NET
+        </div>
+      </div>
+    `;
+  } else if (method === 'Transfer Mandiri' || method === 'Transfer BCA') {
+    const accDigits = mandiriStr.replace(/[^0-9]/g, '') || '1840005969488';
+    box.innerHTML = `
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-slate-500">Rekening Tujuan Transfer Bank Mandiri:</div>
+          <div class="text-sm font-black text-slate-900 font-mono mt-0.5">${mandiriStr}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Transfer tepat sebesar <strong class="text-emerald-700">${amountFormatted}</strong></div>
+        </div>
+        <button type="button" onclick="copyTextToClipboard('${accDigits}', 'Nomor Rekening Mandiri (${accDigits}) disalin!')" class="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition shrink-0">
+          📋 Salin No. Rek Mandiri
+        </button>
+      </div>
+    `;
+  } else if (method === 'Transfer BRI') {
+    const accDigits = briStr.replace(/[^0-9]/g, '') || '592801012731509';
+    box.innerHTML = `
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-slate-500">Rekening Tujuan Transfer Bank BRI:</div>
+          <div class="text-sm font-black text-slate-900 font-mono mt-0.5">${briStr}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Transfer tepat sebesar <strong class="text-emerald-700">${amountFormatted}</strong></div>
+        </div>
+        <button type="button" onclick="copyTextToClipboard('${accDigits}', 'Nomor Rekening BRI (${accDigits}) disalin!')" class="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition shrink-0">
+          📋 Salin No. Rek BRI
+        </button>
+      </div>
+    `;
+  } else if (method === 'DANA / LinkAja' || method === 'DANA / GoPay / OVO') {
+    const matchPhone = ewalletStr.match(/08[0-9]{8,12}/);
+    const accDigits = matchPhone ? matchPhone[0] : '085691693286';
+    box.innerHTML = `
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="text-[10px] font-bold uppercase text-slate-500">Nomor E-Wallet Resmi HM NET (DANA & LinkAja):</div>
+          <div class="text-sm font-black text-slate-900 font-mono mt-0.5">${ewalletStr}</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Kirim saldo DANA / LinkAja sebesar <strong class="text-emerald-700">${amountFormatted}</strong></div>
+        </div>
+        <button type="button" onclick="copyTextToClipboard('${accDigits}', 'Nomor DANA / LinkAja (${accDigits}) disalin!')" class="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition shrink-0">
+          📋 Salin No. DANA / LinkAja
+        </button>
+      </div>
+    `;
+  } else {
+    box.innerHTML = `
+      <div class="space-y-1 text-xs text-slate-700">
+        <div class="font-black text-slate-900">💵 Pembayaran Manual / Tunai (Cash)</div>
+        <p class="text-[11px] text-slate-600 leading-relaxed">
+          Anda dapat membayar tunai sebesar <strong>${amountFormatted}</strong> langsung ke kantor layanan <strong>HM NET</strong> atau menitipkan kepada petugas teknisi/kolektor kami saat kunjungan lapangan (WA Admin: <strong>085691693286</strong>). Jika sudah menyerahkan uang tunai, silakan klik tombol konfirmasi di bawah agar tercatat otomatis di sistem.
+        </p>
+      </div>
+    `;
+  }
+}
+
+function copyCustomerPayAmount() {
+  copyTextToClipboard(String(cpayState.computedAmount || 0), `Nominal ${formatRupiah(cpayState.computedAmount)} berhasil disalin!`);
+}
+
+function copyTextToClipboard(text, toastMessage) {
+  navigator.clipboard.writeText(String(text)).then(() => {
+    showToast(toastMessage || 'Berhasil disalin!');
+  }).catch(() => {
+    showToast(toastMessage || 'Berhasil disalin!');
+  });
+}
+
+function submitCustomerPortalPayment() {
+  const cust = state.customers.find(c => c.id === cpayState.custId);
+  if (!cust) return;
+
+  const y = cpayState.year;
+  const m = cpayState.month;
+  const method = cpayState.selectedMethod || 'QRIS';
+  const senderNote = (document.getElementById('cpay-sender-note')?.value || '').trim();
+  const todayStr = new Date().toISOString().split('T')[0];
+  const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+  let billIdx = state.bills.findIndex(b => b.customerId === cust.id && b.year === y && b.month === m);
+  const paidAmount = cpayState.computedAmount || cust.price;
+  const autoNote = senderNote
+    ? `${senderNote} (Tercatat Otomatis ${timeStr})`
+    : `Bayar via Link Online (${method} - ${timeStr})`;
+
+  if (billIdx !== -1) {
+    state.bills[billIdx] = {
+      ...state.bills[billIdx],
+      status: 'LUNAS',
+      amountPaid: paidAmount,
+      paymentDate: todayStr,
+      paymentMethod: method,
+      notes: autoNote
+    };
+  } else {
+    state.bills.push({
+      id: `bill-${cust.id}-${y}-${m}`,
+      customerId: cust.id,
+      year: y,
+      month: m,
+      tariff: cust.price,
+      amountPaid: paidAmount,
+      status: 'LUNAS',
+      paymentDate: todayStr,
+      paymentMethod: method,
+      notes: autoNote
+    });
+  }
+
+  saveBills();
+
+  // Broadcast real-time event across browser tabs so Admin Dashboard updates immediately
+  try {
+    localStorage.setItem('hmnet_last_auto_payment', JSON.stringify({
+      custId: cust.id,
+      custName: cust.name,
+      amount: paidAmount,
+      method,
+      year: y,
+      month: m,
+      timestamp: Date.now()
+    }));
+  } catch (e) {}
+
+  renderCustomerPayPortal();
+  showToast(`Pembayaran ${cust.name} (${formatRupiah(paidAmount)}) otomatis tercatat LUNAS di sistem! 🎉`);
+}
+
+function sendCustomerPaidNoticeToAdminWa() {
+  const cust = state.customers.find(c => c.id === cpayState.custId);
+  if (!cust) return;
+
+  const y = cpayState.year;
+  const m = cpayState.month;
+  const bill = state.bills.find(b => b.customerId === cust.id && b.year === y && b.month === m);
+  const tpls = getWaTemplates();
+  const cleanAdminWa = formatCleanWaPhone(tpls.adminWa || DEFAULT_WA_TEMPLATES.adminWa);
+
+  const baseUrl = window.location.origin + window.location.pathname;
+  const autoSyncLink = `${baseUrl}?autoconfirm=1&cid=${encodeURIComponent(cust.id)}&y=${y}&m=${m}&amt=${bill?.amountPaid || cust.price}&method=${encodeURIComponent(bill?.paymentMethod || 'QRIS')}`;
+
+  const text =
+`*KONFIRMASI PEMBAYARAN OTOMATIS - HM NET*
+=================================
+Halo Admin HM NET, saya sudah melakukan pembayaran tagihan Wi-Fi melalui Link Pembayaran:
+• Nama Pelanggan: *${cust.name}* (PON ${cust.pon})
+• Periode: *${MONTH_NAMES[m - 1]} ${y}*
+• Nominal Dibayar: *${formatRupiah(bill?.amountPaid || cust.price)}*
+• Metode Pembayaran: *${bill?.paymentMethod || cpayState.selectedMethod}*
+• Status: *LUNAS*
+
+🔗 *Klik Link Sinkronisasi Otomatis Admin:*
+${autoSyncLink}`;
+
+  const waUrl = cleanAdminWa
+    ? `https://wa.me/${cleanAdminWa}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(waUrl, '_blank');
+}
+
+function handleUrlPaymentRouting() {
+  // If opened via localtest.me or nip.io on the local computer, redirect to localhost so it shares the same localStorage
+  if (window.location.hostname === 'localtest.me' || window.location.hostname === '127.0.0.1.nip.io') {
+    const portPart = window.location.port ? `:${window.location.port}` : '';
+    window.location.replace(`${window.location.protocol}//localhost${portPart}${window.location.pathname}${window.location.search}`);
+    return true;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+
+  // 1) Auto-Confirm Link clicked by Admin from WA (?autoconfirm=1&cid=...)
+  if (params.get('autoconfirm') === '1' && params.get('cid')) {
+    loadData();
+    const cid = params.get('cid');
+    const y = parseInt(params.get('y')) || state.selectedYear;
+    const m = parseInt(params.get('m')) || state.selectedMonth;
+    const amt = parseInt(params.get('amt')) || 0;
+    const method = params.get('method') || 'Transfer / Link Online';
+    const cust = state.customers.find(c => c.id === cid);
+
+    if (cust) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const idx = state.bills.findIndex(b => b.customerId === cid && b.year === y && b.month === m);
+      if (idx !== -1) {
+        state.bills[idx].status = 'LUNAS';
+        state.bills[idx].amountPaid = amt || state.bills[idx].tariff || cust.price;
+        state.bills[idx].paymentDate = todayStr;
+        state.bills[idx].paymentMethod = method;
+        state.bills[idx].notes = `Tercatat Otomatis via Link Bayar (${method})`;
+      } else {
+        state.bills.push({
+          id: `bill-${cid}-${y}-${m}`,
+          customerId: cid,
+          year: y,
+          month: m,
+          tariff: cust.price,
+          amountPaid: amt || cust.price,
+          status: 'LUNAS',
+          paymentDate: todayStr,
+          paymentMethod: method,
+          notes: `Tercatat Otomatis via Link Bayar (${method})`
+        });
+      }
+      saveBills();
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        showToast(`✅ Pembayaran otomatis dari ${cust.name} (${formatRupiah(amt || cust.price)}) berhasil dicatat LUNAS!`);
+      }, 400);
+    }
+    return false;
+  }
+
+  // 2) Direct Customer Payment Link (?pay=c-1&y=2026&m=11&name=...)
+  if (params.get('pay')) {
+    loadData();
+    const cid = params.get('pay');
+    const y = parseInt(params.get('y')) || state.selectedYear;
+    const m = parseInt(params.get('m')) || state.selectedMonth;
+    const urlName = params.get('name');
+    const urlAmt = parseInt(params.get('amt')) || 0;
+    const urlPkg = params.get('pkg') || '10 Mbps';
+    const urlPon = params.get('pon') || '1';
+
+    let existingCust = state.customers.find(c => c.id === cid);
+    if (!existingCust && urlName) {
+      existingCust = {
+        id: cid,
+        name: urlName,
+        phone: '',
+        address: '-',
+        modemType: 'ONU',
+        sn: '-',
+        ontStatus: 'Up',
+        pon: urlPon,
+        redaman: -20,
+        speed: urlPkg,
+        price: urlAmt || 150000,
+        status: 'AKTIF',
+        installedDate: new Date().toISOString().split('T')[0]
+      };
+      state.customers.push(existingCust);
+    }
+
+    if (urlAmt > 0) {
+      const existingBill = state.bills.find(b => b.customerId === cid && b.year === y && b.month === m);
+      if (!existingBill) {
+        state.bills.push({
+          id: `bill-${cid}-${y}-${m}`,
+          customerId: cid,
+          year: y,
+          month: m,
+          tariff: urlAmt,
+          amountPaid: 0,
+          status: 'BELUM',
+          paymentDate: '',
+          paymentMethod: '',
+          notes: ''
+        });
+      }
+    }
+
+    openCustomerPayPortal(cid, y, m);
+    return true;
+  }
+
+  return false;
+}
+
+// Listen for real-time automatic payments across tabs
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEYS.BILLS || e.key === 'hmnet_last_auto_payment') {
+    loadData();
+    renderDashboard();
+    renderGridTagihan();
+    renderExpenses();
+    if (state.currentTab === 'broadcast') {
+      renderBroadcastUnpaidTable();
+    }
+    if (e.key === 'hmnet_last_auto_payment' && e.newValue) {
+      try {
+        const info = JSON.parse(e.newValue);
+        showToast(`💰 Pembayaran Masuk Otomatis: ${info.custName} (${formatRupiah(info.amount)}) via ${info.method} — LUNAS!`);
+      } catch (err) {}
+    }
+  }
+});
+
+// =========================================================
+// SMART BROADCAST QUEUE RUNNER MODAL (ANTI POP-UP BLOCKER)
+// =========================================================
+function formatCleanWaPhone(phoneRaw) {
+  let clean = String(phoneRaw || '').replace(/[^0-9]/g, '');
+  if (!clean || clean.length < 8) return '';
+  if (clean.startsWith('0')) clean = '62' + clean.substring(1);
+  return clean;
+}
+
+function openModalBroadcastQueue(queueItems, title, subtitle, themeColor = 'emerald') {
+  stopBroadcastAutoSend();
+  state.broadcastQueue = queueItems;
+
+  const modal = document.getElementById('modal-broadcast-queue');
+  const header = document.getElementById('bcast-queue-header');
+  const titleEl = document.getElementById('bcast-queue-title');
+  const subEl = document.getElementById('bcast-queue-subtitle');
+  const apiBtn = document.getElementById('btn-bcast-api-all');
+
+  if (header) {
+    header.className = themeColor === 'rose'
+      ? 'px-6 py-4 bg-rose-700 text-white flex items-center justify-between shrink-0'
+      : 'px-6 py-4 bg-emerald-700 text-white flex items-center justify-between shrink-0';
+  }
+  if (titleEl) titleEl.textContent = title || 'Pengiriman Pesan WhatsApp Serentak';
+  if (subEl) subEl.textContent = subtitle || '';
+
+  const tpls = getWaTemplates();
+  if (apiBtn) {
+    if (tpls.fonnteToken && tpls.fonnteToken.length > 5) {
+      apiBtn.classList.remove('hidden');
+    } else {
+      apiBtn.classList.add('hidden');
+    }
+  }
+
+  renderBroadcastQueueModal();
+  if (modal) modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeModalBroadcastQueue() {
+  stopBroadcastAutoSend();
+  document.getElementById('modal-broadcast-queue')?.classList.add('hidden');
+}
+
+function renderBroadcastQueueModal() {
+  const queue = state.broadcastQueue || [];
+  const total = queue.length;
+  const sentCount = queue.filter(q => q.status === 'SENT').length;
+  const pct = total > 0 ? Math.round((sentCount / total) * 100) : 0;
+
+  const progText = document.getElementById('bcast-queue-progress-text');
+  const progBar = document.getElementById('bcast-queue-progress-bar');
+  if (progText) progText.textContent = `${sentCount} / ${total} Terkirim (${pct}%)`;
+  if (progBar) progBar.style.width = `${pct}%`;
+
+  const nextIdx = queue.findIndex(q => q.status === 'PENDING');
+  const nextLabel = document.getElementById('bcast-next-customer-label');
+  const nextSub = document.getElementById('bcast-next-customer-sub');
+  const nextBtn = document.getElementById('btn-bcast-send-next');
+  const nextBtnLabel = document.getElementById('btn-bcast-send-next-label');
+
+  if (nextIdx !== -1) {
+    const nextItem = queue[nextIdx];
+    if (nextLabel) nextLabel.textContent = `${nextIdx + 1}. ${nextItem.name} (+${nextItem.cleanPhone}) — ${nextItem.badgeText}`;
+    if (nextSub) nextSub.textContent = 'Klik tombol hijau di samping untuk membuka WA pelanggan ini & lanjut otomatis ke antrean berikutnya.';
+    if (nextBtn) nextBtn.disabled = false;
+    if (nextBtnLabel) nextBtnLabel.textContent = `Kirim ke ${nextItem.name} (${nextIdx + 1}/${total})`;
+  } else {
+    if (nextLabel) nextLabel.textContent = '🎉 Seluruh Antrean Pesan Serentak Selesai Dikirim!';
+    if (nextSub) nextSub.textContent = `Semua ${total} pelanggan terpilih telah berhasil diproses.`;
+    if (nextBtn) nextBtn.disabled = true;
+    if (nextBtnLabel) nextBtnLabel.textContent = 'Selesai Terkirim Semua ✅';
+    stopBroadcastAutoSend();
+  }
+
+  const listEl = document.getElementById('bcast-queue-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+
+  queue.forEach((item, idx) => {
+    const isSent = item.status === 'SENT';
+    const isNext = idx === nextIdx;
+
+    const row = document.createElement('div');
+    row.className = `p-3 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+      isSent
+        ? 'bg-emerald-50/60 border-emerald-200 text-slate-600'
+        : isNext
+          ? 'bg-amber-50/70 border-amber-300 shadow-2xs'
+          : 'bg-white border-slate-200'
+    }`;
+
+    row.innerHTML = `
+      <div class="flex items-start space-x-2.5">
+        <div class="w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] shrink-0 ${
+          isSent ? 'bg-emerald-600 text-white' : isNext ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+        }">
+          ${isSent ? '✓' : idx + 1}
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span class="font-bold text-slate-900">${item.name}</span>
+            <span class="font-mono text-[11px] text-slate-500">+${item.cleanPhone}</span>
+            <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">${item.badgeText}</span>
+          </div>
+          <div class="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-mono">${item.message.replace(/\n/g, ' ')}</div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+        ${
+          isSent
+            ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-[11px]">Terkirim ✅</span>
+               <button type="button" onclick="sendBroadcastQueueItem(${idx})" class="px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-800 underline">Kirim Ulang</button>`
+            : `<button type="button" onclick="sendBroadcastQueueItem(${idx})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[11px] transition flex items-center space-x-1">
+                 <i data-lucide="send" class="w-3 h-3"></i>
+                 <span>Kirim WA</span>
+               </button>`
+        }
+      </div>
+    `;
+    listEl.appendChild(row);
+  });
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function sendBroadcastQueueItem(index) {
+  const item = state.broadcastQueue[index];
+  if (!item) return;
+
+  const waUrl = `https://wa.me/${item.cleanPhone}?text=${encodeURIComponent(item.message)}`;
+  window.open(waUrl, '_blank');
+
+  item.status = 'SENT';
+  renderBroadcastQueueModal();
+}
+
+function sendNextInBroadcastQueue() {
+  const nextIdx = (state.broadcastQueue || []).findIndex(q => q.status === 'PENDING');
+  if (nextIdx === -1) {
+    showToast('Semua antrean pelanggan sudah terkirim!');
+    stopBroadcastAutoSend();
+    return;
+  }
+  sendBroadcastQueueItem(nextIdx);
+}
+
+function toggleBroadcastAutoSend() {
+  if (state.broadcastAutoTimer) {
+    stopBroadcastAutoSend();
+    showToast('Pengiriman otomatis beruntun dijeda.');
+    return;
+  }
+
+  const nextIdx = (state.broadcastQueue || []).findIndex(q => q.status === 'PENDING');
+  if (nextIdx === -1) {
+    showToast('Semua pelanggan dalam antrean sudah terkirim!');
+    return;
+  }
+
+  const btnLabel = document.getElementById('btn-bcast-auto-label');
+  if (btnLabel) btnLabel.textContent = 'Jeda Otomatis (Aktif...)';
+
+  // Immediately send the first pending one
+  sendNextInBroadcastQueue();
+
+  state.broadcastAutoTimer = setInterval(() => {
+    const pendingIdx = (state.broadcastQueue || []).findIndex(q => q.status === 'PENDING');
+    if (pendingIdx === -1) {
+      stopBroadcastAutoSend();
+      showToast('Seluruh pesan serentak selesai dikirim! 🎉');
+      return;
+    }
+    sendBroadcastQueueItem(pendingIdx);
+  }, 2800);
+}
+
+function stopBroadcastAutoSend() {
+  if (state.broadcastAutoTimer) {
+    clearInterval(state.broadcastAutoTimer);
+    state.broadcastAutoTimer = null;
+  }
+  const btnLabel = document.getElementById('btn-bcast-auto-label');
+  if (btnLabel) btnLabel.textContent = 'Kirim Otomatis Beruntun';
+}
+
+async function sendBroadcastViaFonnteApi() {
+  const tpls = getWaTemplates();
+  const token = (tpls.fonnteToken || '').trim();
+  if (!token) {
+    alert('Token API Fonnte belum diisi! Silakan isi di menu Ubah Template Pesan atau gunakan tombol Kirim Berikutnya (WA Web).');
+    return;
+  }
+
+  const pendingItems = (state.broadcastQueue || []).filter(q => q.status === 'PENDING');
+  if (pendingItems.length === 0) {
+    showToast('Semua antrean sudah terkirim!');
+    return;
+  }
+
+  if (!confirm(`Kirim pesan langsung di background ke ${pendingItems.length} pelanggan menggunakan API Fonnte?`)) {
+    return;
+  }
+
+  for (let i = 0; i < state.broadcastQueue.length; i++) {
+    const item = state.broadcastQueue[i];
+    if (item.status === 'SENT') continue;
+    try {
+      const formData = new FormData();
+      formData.append('target', item.cleanPhone);
+      formData.append('message', item.message);
+      const res = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: { Authorization: token },
+        body: formData
+      });
+      if (res.ok) {
+        item.status = 'SENT';
+        renderBroadcastQueueModal();
+      }
+    } catch (err) {
+      console.error('Fonnte send error:', err);
+    }
+  }
+
+  showToast('Pengiriman serentak via API Fonnte selesai!');
+}
+
 // ==========================================
 // APPLICATION ENTRY POINT
 // ==========================================
 window.addEventListener('DOMContentLoaded', () => {
+  // Check if customer opened direct payment link (?pay=...)
+  if (handleUrlPaymentRouting()) {
+    return;
+  }
   // Check auth first: if logged in, load app; if not, show login view
   const isAuthenticated = checkAuthSession();
   if (isAuthenticated) {

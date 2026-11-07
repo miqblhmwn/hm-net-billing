@@ -152,10 +152,230 @@
           </button>
         </form>
 
+        <!-- Shortcut Portal Bayar Pelanggan -->
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <button type="button" onclick="openCustomerPayPortal()" class="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2">
+            <i data-lucide="credit-card" class="w-4 h-4 text-emerald-600"></i>
+            <span>Pelanggan HM NET? Cek & Bayar Tagihan di Sini</span>
+          </button>
+        </div>
+
       </div>
 
       <div class="text-center mt-5 text-xs text-slate-400 font-medium">
         HM NET • Akses Internet Rumahan
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- PORTAL PEMBAYARAN MANDIRI PELANGGAN (KLIK LINK BAYAR)    -->
+  <!-- ======================================================== -->
+  <div id="view-customer-pay" class="hidden min-h-screen bg-slate-900 py-6 px-4 flex flex-col items-center justify-start relative overflow-y-auto">
+    <div class="w-full max-w-xl space-y-4">
+
+      <!-- Top Bar Portal Pelanggan -->
+      <div class="flex items-center justify-between bg-slate-800/90 border border-slate-700 px-4 py-3 rounded-2xl text-white">
+        <div class="flex items-center space-x-3">
+          <img src="assets/logo.png" alt="HM NET" class="h-9 w-auto object-contain bg-white rounded-lg p-1">
+          <div>
+            <div class="text-sm font-black tracking-tight">HM NET • Portal Pembayaran</div>
+            <div class="text-[11px] text-emerald-400 font-medium">Pembayaran Online & Otomatis Tercatat</div>
+          </div>
+        </div>
+        <button type="button" onclick="closeCustomerPayPortal()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span id="btn-cpay-back-label">Kembali</span>
+        </button>
+      </div>
+
+      <!-- Box Pencarian / Pilih Pelanggan (Bisa Pilih atau Ketik No HP / ID) -->
+      <div id="cpay-lookup-box" class="bg-white p-4 rounded-2xl shadow-lg border border-slate-200 space-y-3">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-black text-slate-800 uppercase flex items-center space-x-1.5">
+            <i data-lucide="user-check" class="w-4 h-4 text-brand-600"></i>
+            <span>Pilih / Cari Data Tagihan Pelanggan</span>
+          </label>
+          <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Link Tagihan</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+          <div class="sm:col-span-6">
+            <select id="cpay-select-customer" onchange="onCustomerPaySelectChange()" class="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+          <div class="sm:col-span-3">
+            <select id="cpay-select-month" onchange="onCustomerPaySelectChange()" class="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2.5 text-slate-800 focus:outline-none"></select>
+          </div>
+          <div class="sm:col-span-3">
+            <select id="cpay-select-year" onchange="onCustomerPaySelectChange()" class="w-full text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2.5 text-slate-800 focus:outline-none"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Checkout & Invoice Card -->
+      <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+
+        <!-- Invoice Header Summary -->
+        <div id="cpay-banner" class="p-6 bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-700 text-white space-y-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-white/20 text-white tracking-wider">Tagihan Internet Wi-Fi</span>
+              <h2 id="cpay-cust-name" class="text-xl font-black mt-1.5">Nama Pelanggan</h2>
+              <p id="cpay-cust-meta" class="text-xs text-emerald-100">Paket 10 Mbps • Jalur PON 1 • Periode November 2026</p>
+            </div>
+            <div id="cpay-status-badge" class="px-3 py-1 rounded-xl text-xs font-black uppercase bg-rose-500 text-white shadow-sm">
+              BELUM LUNAS
+            </div>
+          </div>
+
+          <!-- Total Tagihan Box -->
+          <div class="p-4 bg-white/15 backdrop-blur-xs rounded-2xl border border-white/25 flex items-center justify-between">
+            <div>
+              <div class="text-[11px] text-emerald-100 font-semibold uppercase">Total Jumlah Tagihan:</div>
+              <div id="cpay-total-amount" class="text-2xl sm:text-3xl font-black tracking-tight mt-0.5">Rp 150.000</div>
+              <div id="cpay-unique-code-hint" class="text-[10px] text-emerald-100 mt-0.5">Nominal sesuai tagihan resmi HM NET</div>
+            </div>
+            <button type="button" onclick="copyCustomerPayAmount()" class="px-3 py-2 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center space-x-1.5">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Salin Nominal</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- SECTION A: JIKA TAGIHAN BELUM LUNAS (PILIH METODE PEMBAYARAN) -->
+        <div id="cpay-unpaid-section" class="p-6 space-y-5">
+
+          <div>
+            <label class="block text-xs font-black text-slate-800 uppercase mb-2">1. Pilih Opsi Metode Pembayaran Anda:</label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <button type="button" onclick="selectCustomerPayMethod('QRIS')" id="btn-cpay-method-qris" class="p-3 rounded-2xl border-2 text-left transition flex flex-col justify-between bg-emerald-50 border-emerald-500 text-emerald-950 shadow-2xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-lg">📱</span>
+                  <span class="px-1.5 py-0.5 text-[9px] font-black bg-emerald-600 text-white rounded">Populer</span>
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-black">QRIS All Payment</div>
+                  <div class="text-[10px] text-slate-500">Scan semua Bank/DANA/LinkAja</div>
+                </div>
+              </button>
+
+              <button type="button" onclick="selectCustomerPayMethod('Transfer Mandiri')" id="btn-cpay-method-bca" class="p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-white border-slate-200 hover:bg-slate-50 text-slate-800">
+                <div class="text-lg">🏦</div>
+                <div class="mt-2">
+                  <div class="text-xs font-black">Transfer Mandiri</div>
+                  <div class="text-[10px] text-slate-500">1840005969488</div>
+                </div>
+              </button>
+
+              <button type="button" onclick="selectCustomerPayMethod('Transfer BRI')" id="btn-cpay-method-bri" class="p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-white border-slate-200 hover:bg-slate-50 text-slate-800">
+                <div class="text-lg">🏦</div>
+                <div class="mt-2">
+                  <div class="text-xs font-black">Transfer BRI</div>
+                  <div class="text-[10px] text-slate-500">592801012731509</div>
+                </div>
+              </button>
+
+              <button type="button" onclick="selectCustomerPayMethod('DANA / LinkAja')" id="btn-cpay-method-ewallet" class="p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-white border-slate-200 hover:bg-slate-50 text-slate-800">
+                <div class="text-lg">👛</div>
+                <div class="mt-2">
+                  <div class="text-xs font-black">DANA / LinkAja</div>
+                  <div class="text-[10px] text-slate-500">085691693286</div>
+                </div>
+              </button>
+
+              <button type="button" onclick="selectCustomerPayMethod('Cash / Tunai')" id="btn-cpay-method-cash" class="p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-white border-slate-200 hover:bg-slate-50 text-slate-800 col-span-2 sm:col-span-2">
+                <div class="flex items-center space-x-2">
+                  <span class="text-lg">💵</span>
+                  <span class="px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 rounded-md">Opsi Manual</span>
+                </div>
+                <div class="mt-2">
+                  <div class="text-xs font-black">Bayar Manual / Tunai (Cash)</div>
+                  <div class="text-[10px] text-slate-500">Bayar langsung ke kantor atau melalui teknisi HM NET saat kunjungan</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Detail Instruksi Sesuai Metode yang Dipilih -->
+          <div id="cpay-method-instruction-box" class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <!-- Populated dynamically via JS -->
+          </div>
+
+          <!-- Input Opsional Catatan / Nama Pengirim -->
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">2. Nama Pengirim / Catatan Pembayaran (Opsional):</label>
+            <input type="text" id="cpay-sender-note" placeholder="Contoh: Transfer a.n Falah / Sudah bayar via QRIS DANA" class="w-full text-xs px-3.5 py-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium">
+          </div>
+
+          <!-- Tombol Selesaikan & Catat Otomatis -->
+          <div class="pt-2 space-y-2">
+            <button type="button" onclick="submitCustomerPortalPayment()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-emerald-600/25 transition flex items-center justify-center space-x-2">
+              <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+              <span>Saya Sudah Membayar — Catat Pembayaran Otomatis</span>
+            </button>
+            <p class="text-[11px] text-center text-slate-400">
+              Begitu diklik, sistem HM NET akan <strong>otomatis mencatat pembayaran Anda sebagai LUNAS</strong> dan menerbitkan Kuitansi Digital Resmi.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- SECTION B: JIKA SUDAH LUNAS (KUITANSI DIGITAL RESMI) -->
+        <div id="cpay-paid-section" class="hidden p-6 space-y-5 bg-emerald-50/40">
+          <div class="p-5 bg-white rounded-2xl border-2 border-emerald-500 shadow-sm space-y-4">
+            <div class="flex items-center space-x-3 border-b border-slate-100 pb-3">
+              <div class="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <i data-lucide="badge-check" class="w-7 h-7"></i>
+              </div>
+              <div>
+                <div class="text-xs font-black uppercase text-emerald-700 tracking-wider">Kuitansi Pembayaran Resmi</div>
+                <h3 class="text-base font-black text-slate-900">TERIMA KASIH, TAGIHAN ANDA SUDAH LUNAS!</h3>
+                <p class="text-[11px] text-slate-500">Pembayaran Anda telah tercatat otomatis di dalam sistem pembukuan HM NET.</p>
+              </div>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-500">Nama Pelanggan:</span>
+                <span id="cpay-receipt-name" class="font-bold text-slate-900">-</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-500">Periode Tagihan:</span>
+                <span id="cpay-receipt-period" class="font-bold text-slate-900">-</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-500">Nominal Dibayar:</span>
+                <span id="cpay-receipt-amount" class="font-black text-emerald-700 text-sm">-</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-500">Metode Pembayaran:</span>
+                <span id="cpay-receipt-method" class="font-bold text-slate-800">-</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-b border-slate-100">
+                <span class="text-slate-500">Tanggal Tercatat:</span>
+                <span id="cpay-receipt-date" class="font-bold text-slate-800">-</span>
+              </div>
+              <div class="flex justify-between py-1.5">
+                <span class="text-slate-500">Status Sistem:</span>
+                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-black text-[11px]">LUNAS TERVERIFIKASI ✅</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+              <button type="button" onclick="window.print()" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+                <span>Cetak / Simpan Bukti PDF</span>
+              </button>
+              <button type="button" onclick="sendCustomerPaidNoticeToAdminWa()" class="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5">
+                <i data-lucide="message-circle" class="w-4 h-4"></i>
+                <span>Kirim Bukti Lunas ke WA Admin</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -209,6 +429,14 @@
           <button onclick="navSelect('tagihan')" id="side-tagihan" class="side-nav-item w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition">
             <i data-lucide="receipt" class="w-4 h-4"></i>
             <span>Tagihan & Grid Bulanan</span>
+          </button>
+
+          <button onclick="navSelect('broadcast')" id="side-broadcast" class="side-nav-item w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition">
+            <i data-lucide="megaphone" class="w-4 h-4 text-emerald-600"></i>
+            <div class="flex-1 flex items-center justify-between text-left">
+              <span>Broadcast & Template WA</span>
+              <span class="px-1.5 py-0.5 text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200">WA</span>
+            </div>
           </button>
 
           <button onclick="navSelect('keuangan')" id="side-keuangan" class="side-nav-item w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition">
@@ -556,14 +784,18 @@
             <h3 class="text-lg font-bold">Kelola Tagihan & Catatan Pembayaran Bulan Berjalan</h3>
             <p class="text-xs text-slate-300">Buka lembar kerja grid bulanan untuk checklist lunas, input pembayaran parsial, atau bagikan kuitansi WhatsApp.</p>
           </div>
-          <div class="flex items-center space-x-3 w-full md:w-auto">
-            <button onclick="switchTab('tagihan')" class="w-full md:w-auto px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-2">
+          <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            <button onclick="switchTab('tagihan')" class="w-full sm:w-auto px-4 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-2">
               <i data-lucide="receipt" class="w-4 h-4"></i>
               <span>Buka Lembar Tagihan</span>
             </button>
-            <button onclick="openModalPelanggan()" class="w-full md:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-600 shadow transition flex items-center justify-center space-x-2">
-              <i data-lucide="user-plus" class="w-4 h-4"></i>
-              <span>Tambah Pelanggan</span>
+            <button onclick="openBroadcastSubtab('unpaid')" class="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-2">
+              <i data-lucide="megaphone" class="w-4 h-4"></i>
+              <span>Broadcast Belum Bayar</span>
+            </button>
+            <button onclick="openBroadcastSubtab('outage')" class="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-2">
+              <i data-lucide="alert-octagon" class="w-4 h-4"></i>
+              <span>Info Gangguan WA</span>
             </button>
           </div>
         </div>
@@ -605,6 +837,12 @@
               <option value="SECOND">SECOND</option>
               <option value="GANTI">GANTI</option>
             </select>
+
+            <!-- Broadcast Gangguan Button -->
+            <button onclick="openBroadcastSubtab('outage')" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5" title="Kirim pesan serentak informasi gangguan jaringan ke pelanggan">
+              <i data-lucide="radio-tower" class="w-4 h-4"></i>
+              <span>Info Gangguan WA</span>
+            </button>
 
             <!-- Tambah Pelanggan Button -->
             <button onclick="openModalPelanggan()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5">
@@ -691,6 +929,18 @@
             <button onclick="generateMonthlyBills()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5" title="Generate tagihan untuk semua pelanggan aktif di bulan terpilih">
               <i data-lucide="sparkles" class="w-4 h-4 text-brand-200"></i>
               <span>Generate Tagihan Bulan Ini</span>
+            </button>
+
+            <!-- Kirim WA Serentak Belum Bayar Button -->
+            <button onclick="openBroadcastSubtab('unpaid')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5" title="Pilih/ceklis pelanggan yang belum bayar untuk dikirimi pesan WA serentak">
+              <i data-lucide="megaphone" class="w-4 h-4 text-emerald-100"></i>
+              <span>Kirim WA Serentak (Belum Bayar)</span>
+            </button>
+
+            <!-- Edit Template WA Button -->
+            <button onclick="openBroadcastSubtab('templates')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition flex items-center space-x-1.5" title="Ubah format template pesan WhatsApp & nomor rekening">
+              <i data-lucide="file-edit" class="w-4 h-4 text-emerald-600"></i>
+              <span>Ubah Template WA</span>
             </button>
           </div>
         </div>
@@ -960,6 +1210,550 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- TAB 6: BROADCAST WA SERENTAK & PENGATURAN TEMPLATE PESAN  -->
+      <!-- ========================================================= -->
+      <section id="tab-broadcast" class="hidden space-y-6">
+
+        <!-- Header & Sub-Menu Switcher -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="flex items-start space-x-3.5">
+            <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200 shadow-2xs">
+              <i data-lucide="megaphone" class="w-6 h-6"></i>
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <h2 class="text-lg font-black text-slate-900">Pusat Broadcast WhatsApp & Template Pesan</h2>
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">Multi-Kirim & Kustomisasi</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Kirim tagihan serentak ke pelanggan belum bayar (dengan ceklis), siarkan info gangguan jaringan, dan atur template pesan WA.</p>
+            </div>
+          </div>
+
+          <!-- 3 Sub-Menu Pills -->
+          <div class="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+            <button type="button" onclick="openBroadcastSubtab('unpaid')" id="btn-bcast-sub-unpaid" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 bg-emerald-600 text-white shadow-xs">
+              <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
+              <span>1. Pesan Serentak Belum Bayar</span>
+            </button>
+            <button type="button" onclick="openBroadcastSubtab('outage')" id="btn-bcast-sub-outage" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 text-slate-600 hover:text-slate-900 hover:bg-white/60">
+              <i data-lucide="radio-tower" class="w-3.5 h-3.5 text-rose-600"></i>
+              <span>2. Pesan Serentak Gangguan</span>
+            </button>
+            <button type="button" onclick="openBroadcastSubtab('templates')" id="btn-bcast-sub-templates" class="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 text-slate-600 hover:text-slate-900 hover:bg-white/60">
+              <i data-lucide="file-edit" class="w-3.5 h-3.5 text-brand-600"></i>
+              <span>3. Ubah Template Pesan</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- SUB-TAB 1: PESAN SERENTAK PELANGGAN BELUM BAYAR (CEKLIS)  -->
+        <!-- ========================================================= -->
+        <div id="subtab-broadcast-unpaid" class="space-y-5">
+
+          <!-- Top Configuration: Filter & Template Selection -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- Left 5 Cols: Pilih Template & Preview Pesan Tagihan -->
+            <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="message-square-text" class="w-4 h-4 text-emerald-600"></i>
+                  <h3 class="text-sm font-bold text-slate-900">Format Pesan Tagihan Serentak</h3>
+                </div>
+                <button type="button" onclick="openBroadcastSubtab('templates')" class="text-[11px] font-bold text-brand-600 hover:text-brand-800 flex items-center space-x-1">
+                  <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+                  <span>Atur Template Permanen</span>
+                </button>
+              </div>
+
+              <!-- Pilihan Jenis Pesan Tagihan -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1.5">Pilih Jenis Template Tagihan:</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" onclick="setUnpaidBroadcastTemplate('tagihan')" id="btn-unpaid-tpl-tagihan" class="p-2.5 rounded-xl border text-xs font-bold transition text-left flex items-center space-x-2 bg-emerald-50 text-emerald-900 border-emerald-400">
+                    <span class="text-base">📢</span>
+                    <div>
+                      <div>Tagihan Baru</div>
+                      <div class="text-[10px] font-normal text-emerald-700">Tagihan awal bulan</div>
+                    </div>
+                  </button>
+                  <button type="button" onclick="setUnpaidBroadcastTemplate('peringatan')" id="btn-unpaid-tpl-peringatan" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left flex items-center space-x-2 bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    <span class="text-base">⚠️</span>
+                    <div>
+                      <div>Pengingat Jatuh Tempo</div>
+                      <div class="text-[10px] font-normal text-slate-400">Peringatan sebelum isolir</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Editor / Preview Template Serentak -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-[11px] font-bold text-slate-700 uppercase">Isi Template Pesan (Otomatis Menyesuaikan Nama & Tagihan):</label>
+                </div>
+                <textarea id="bcast-unpaid-template-text" rows="9" class="w-full text-xs p-3 font-mono border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none leading-relaxed text-slate-800"></textarea>
+                <div class="mt-2 p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between gap-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="text-[10px] font-extrabold text-emerald-800 uppercase">🔗 Link Pembayaran Otomatis (Bisa Langsung Diklik / Dipencet):</div>
+                    <a href="#" onclick="openCustomerPayPortal(); return false;" id="bcast-unpaid-sample-link" class="text-xs font-mono font-bold text-blue-600 hover:text-blue-800 underline break-all block mt-0.5">
+                      Klik di sini untuk membuka Halaman Link Pembayaran Pelanggan
+                    </a>
+                  </div>
+                  <button type="button" onclick="openCustomerPayPortal()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold shrink-0 transition">
+                    Buka Link ↗
+                  </button>
+                </div>
+                <div class="mt-1.5 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                  <span>Variabel otomatis:</span>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{nama}</code>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{periode}</code>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{paket}</code>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{tagihan}</code>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{link_bayar}</code>
+                  <code class="px-1.5 py-0.5 bg-slate-100 rounded text-emerald-700 font-bold">{rekening}</code>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right 7 Cols: Daftar Ceklis Pelanggan Belum Bayar -->
+            <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+
+              <!-- Filter Bar -->
+              <div class="p-4 border-b border-slate-200 bg-slate-50/60 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 class="text-sm font-black text-slate-900">Daftar Pelanggan Belum Lunas (Pilih / Ceklis)</h3>
+                    <p class="text-[11px] text-slate-500">Centang pelanggan yang ingin dikirimi pesan tagihan serentak pada periode terpilih.</p>
+                  </div>
+                  <!-- Periode Bulan & Tahun -->
+                  <div class="flex items-center space-x-1.5">
+                    <select id="bcast-unpaid-month" onchange="renderBroadcastUnpaidTable()" class="text-xs font-bold bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 focus:outline-none"></select>
+                    <select id="bcast-unpaid-year" onchange="renderBroadcastUnpaidTable()" class="text-xs font-bold bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 focus:outline-none"></select>
+                  </div>
+                </div>
+
+                <!-- Search & Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                    <input type="text" id="bcast-unpaid-search" oninput="renderBroadcastUnpaidTable()" placeholder="Cari nama / no WA..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  </div>
+                  <select id="bcast-unpaid-status-filter" onchange="renderBroadcastUnpaidTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                    <option value="ALL_UNPAID">Semua Belum Lunas (Belum + Cicil)</option>
+                    <option value="BELUM">Hanya Belum Bayar (Rp 0)</option>
+                    <option value="SEBAGIAN">Hanya Bayar Sebagian (Cicil)</option>
+                  </select>
+                  <select id="bcast-unpaid-pon-filter" onchange="renderBroadcastUnpaidTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                    <option value="ALL">Semua Jalur PON</option>
+                    <option value="1">Jalur PON 1</option>
+                    <option value="2">Jalur PON 2</option>
+                    <option value="3">Jalur PON 3</option>
+                    <option value="4">Jalur PON 4</option>
+                  </select>
+                </div>
+
+                <!-- Quick Check/Uncheck Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onclick="toggleSelectAllUnpaid(true)" class="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] font-bold transition flex items-center space-x-1">
+                      <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+                      <span>Ceklis Semua</span>
+                    </button>
+                    <button type="button" onclick="toggleSelectAllUnpaid(false)" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-semibold transition flex items-center space-x-1">
+                      <i data-lucide="square" class="w-3.5 h-3.5"></i>
+                      <span>Hapus Ceklis</span>
+                    </button>
+                  </div>
+                  <div class="text-xs font-bold text-slate-700">
+                    Terpilih: <span id="bcast-unpaid-selected-count" class="text-emerald-700 font-black">0</span> Pelanggan
+                    (<span id="bcast-unpaid-selected-amount" class="text-rose-600 font-black">Rp 0</span>)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Customer Checklist Table -->
+              <div class="overflow-x-auto max-h-[420px] flex-1">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-100 text-slate-700 uppercase font-bold text-[11px] sticky top-0 z-10 border-b border-slate-200">
+                    <tr>
+                      <th class="py-2.5 px-3 w-10 text-center">
+                        <input type="checkbox" id="chk-header-unpaid" onchange="toggleSelectAllUnpaid(this.checked)" class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                      </th>
+                      <th class="py-2.5 px-3">Pelanggan & Paket</th>
+                      <th class="py-2.5 px-2 text-center">PON</th>
+                      <th class="py-2.5 px-3 text-right">Sisa Tagihan</th>
+                      <th class="py-2.5 px-3">Nomor WhatsApp</th>
+                      <th class="py-2.5 px-3 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-bcast-unpaid" class="divide-y divide-slate-100 text-slate-800">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Footer Action Bar: Launch Bulk Broadcast -->
+              <div class="p-4 bg-emerald-50/70 border-t border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="text-xs text-emerald-950">
+                  <span class="font-bold">💡 Siap Kirim Serentak:</span> Pesan untuk setiap pelanggan yang diceklis akan otomatis mencantumkan nama dan nominal tagihan masing-masing.
+                </div>
+                <button type="button" onclick="launchUnpaidBroadcastQueue()" class="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition flex items-center justify-center space-x-2 shrink-0">
+                  <i data-lucide="send" class="w-4 h-4"></i>
+                  <span>Kirim Pesan Serentak (<span id="btn-bcast-unpaid-count">0</span> Pelanggan)</span>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- SUB-TAB 2: PESAN SERENTAK INFORMASI GANGGUAN / MAINTENANCE-->
+        <!-- ========================================================= -->
+        <div id="subtab-broadcast-outage" class="hidden space-y-5">
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- Left 5 Cols: Detail Gangguan & Preview Pesan -->
+            <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="radio-tower" class="w-4 h-4 text-rose-600"></i>
+                  <h3 class="text-sm font-bold text-slate-900">Detail Gangguan / Pemeliharaan Jaringan</h3>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Siaran Cepat</span>
+              </div>
+
+              <!-- Kategori Pemberitahuan Gangguan -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1.5">1. Pilih Jenis Pemberitahuan:</label>
+                <div class="grid grid-cols-3 gap-2">
+                  <button type="button" onclick="setOutageBroadcastType('gangguan')" id="btn-outage-tpl-gangguan" class="p-2 rounded-xl border text-xs font-bold transition text-center bg-rose-50 text-rose-900 border-rose-400">
+                    🚨 Info Gangguan
+                  </button>
+                  <button type="button" onclick="setOutageBroadcastType('maintenance')" id="btn-outage-tpl-maintenance" class="p-2 rounded-xl border text-xs font-semibold transition text-center bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    🔧 Maintenance
+                  </button>
+                  <button type="button" onclick="setOutageBroadcastType('normal')" id="btn-outage-tpl-normal" class="p-2 rounded-xl border text-xs font-semibold transition text-center bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    ✅ Sudah Normal
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pilih Area / Jalur PON Terdampak -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">2. Jalur Terdampak (Otomatis Ceklis):</label>
+                  <select id="outage-target-scope" onchange="onOutageScopeChange()" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    <option value="ALL">Semua Jalur Layanan HM NET</option>
+                    <option value="PON_1">Khusus Jalur PON 1</option>
+                    <option value="PON_2">Khusus Jalur PON 2</option>
+                    <option value="PON_3">Khusus Jalur PON 3</option>
+                    <option value="PON_4">Khusus Jalur PON 4</option>
+                    <option value="REDAMAN_KRITIS">Pelanggan Redaman Kritis (&lt; -27 dB)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Nama Area / Wilayah:</label>
+                  <input type="text" id="outage-area-text" oninput="refreshOutageTemplateText()" value="Seluruh Jalur Layanan HM NET" placeholder="Contoh: Jalur PON 1 / Blok B" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium">
+                </div>
+              </div>
+
+              <!-- Penyebab / Kendala -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">3. Penyebab / Detail Kendala:</label>
+                <input type="text" id="outage-cause-text" oninput="refreshOutageTemplateText()" value="Putus kabel Fiber Optik jalur distribusi (sedang proses penyambungan/splicing)" placeholder="Ketik penyebab gangguan..." class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium">
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                  <button type="button" onclick="setOutageQuickCause('Putus kabel Fiber Optik jalur distribusi (sedang proses penyambungan/splicing)')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">⚡ Kabel FO Putus</button>
+                  <button type="button" onclick="setOutageQuickCause('Gangguan jaringan dari pusat (ISP Upstream)')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">🌐 Gangguan Pusat/ISP</button>
+                  <button type="button" onclick="setOutageQuickCause('Pemadaman listrik PLN di area perangkat server OLT')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">🔌 Listrik OLT Padam</button>
+                  <button type="button" onclick="setOutageQuickCause('Optimalisasi & peremajaan perangkat jaringan OLT')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">🔧 Maintenance OLT</button>
+                </div>
+              </div>
+
+              <!-- Estimasi Penanganan -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">4. Estimasi Waktu Perbaikan:</label>
+                <input type="text" id="outage-eta-text" oninput="refreshOutageTemplateText()" value="1 - 2 Jam ke depan (Sedang ditangani tim teknisi di lapangan)" placeholder="Contoh: 1 - 2 Jam ke depan" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium">
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                  <button type="button" onclick="setOutageQuickEta('1 - 2 Jam ke depan')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">⏱️ 1 - 2 Jam</button>
+                  <button type="button" onclick="setOutageQuickEta('Maksimal 3 Jam ke depan')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">⏱️ Maks 3 Jam</button>
+                  <button type="button" onclick="setOutageQuickEta('Sedang dalam penanganan intensif tim teknisi kami di lapangan')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-semibold transition">👷 Sedang Ditangani Teknisi</button>
+                </div>
+              </div>
+
+              <!-- Teks Pesan Gangguan -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Preview & Edit Teks Pesan Gangguan:</label>
+                <textarea id="bcast-outage-template-text" rows="7" class="w-full text-xs p-3 font-mono border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none leading-relaxed text-slate-800"></textarea>
+              </div>
+            </div>
+
+            <!-- Right 7 Cols: Daftar Ceklis Pelanggan Penerima Info Gangguan -->
+            <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+
+              <!-- Filter Bar -->
+              <div class="p-4 border-b border-slate-200 bg-slate-50/60 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 class="text-sm font-black text-slate-900">Pilih / Ceklis Pelanggan Penerima Info Gangguan</h3>
+                    <p class="text-[11px] text-slate-500">Pilih seluruh pelanggan aktif atau khusus pelanggan pada jalur PON yang sedang mengalami gangguan.</p>
+                  </div>
+                </div>
+
+                <!-- Search & PON Filter -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                    <input type="text" id="bcast-outage-search" oninput="renderBroadcastOutageTable()" placeholder="Cari nama pelanggan, alamat, atau SN..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500">
+                  </div>
+                  <select id="bcast-outage-pon-filter" onchange="renderBroadcastOutageTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                    <option value="ALL">Tampilkan Semua PON</option>
+                    <option value="1">Hanya Jalur PON 1</option>
+                    <option value="2">Hanya Jalur PON 2</option>
+                    <option value="3">Hanya Jalur PON 3</option>
+                    <option value="4">Hanya Jalur PON 4</option>
+                  </select>
+                </div>
+
+                <!-- Quick Check/Uncheck Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onclick="toggleSelectAllOutage(true)" class="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 rounded-lg text-[11px] font-bold transition flex items-center space-x-1">
+                      <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+                      <span>Ceklis Semua Tampil</span>
+                    </button>
+                    <button type="button" onclick="toggleSelectAllOutage(false)" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-semibold transition flex items-center space-x-1">
+                      <i data-lucide="square" class="w-3.5 h-3.5"></i>
+                      <span>Hapus Ceklis</span>
+                    </button>
+                    <button type="button" onclick="selectOutageCriticalOnly()" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg text-[11px] font-bold transition">
+                      🔴 Ceklis Redaman Kritis (&lt; -27 dB)
+                    </button>
+                  </div>
+                  <div class="text-xs font-bold text-slate-700">
+                    Terpilih: <span id="bcast-outage-selected-count" class="text-rose-600 font-black">0</span> Pelanggan
+                  </div>
+                </div>
+              </div>
+
+              <!-- Customer Checklist Table -->
+              <div class="overflow-x-auto max-h-[450px] flex-1">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-100 text-slate-700 uppercase font-bold text-[11px] sticky top-0 z-10 border-b border-slate-200">
+                    <tr>
+                      <th class="py-2.5 px-3 w-10 text-center">
+                        <input type="checkbox" id="chk-header-outage" onchange="toggleSelectAllOutage(this.checked)" class="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer">
+                      </th>
+                      <th class="py-2.5 px-3">Pelanggan & Alamat</th>
+                      <th class="py-2.5 px-2 text-center">PON</th>
+                      <th class="py-2.5 px-3 text-center">Redaman ONT</th>
+                      <th class="py-2.5 px-3">Nomor WhatsApp</th>
+                      <th class="py-2.5 px-3 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-bcast-outage" class="divide-y divide-slate-100 text-slate-800">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Footer Action Bar: Launch Outage Broadcast -->
+              <div class="p-4 bg-rose-50/70 border-t border-rose-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="text-xs text-rose-950">
+                  <span class="font-bold">🚨 Siaran Info Gangguan:</span> Mengirimkan permohonan maaf & estimasi penanganan ke semua pelanggan yang diceklis.
+                </div>
+                <button type="button" onclick="launchOutageBroadcastQueue()" class="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-600/20 transition flex items-center justify-center space-x-2 shrink-0">
+                  <i data-lucide="send" class="w-4 h-4"></i>
+                  <span>Kirim Info Gangguan Serentak (<span id="btn-bcast-outage-count">0</span> Pelanggan)</span>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- SUB-TAB 3: MENU KHUSUS UBAH TEMPLATE PESAN & REKENING WA  -->
+        <!-- ========================================================= -->
+        <div id="subtab-broadcast-templates" class="hidden space-y-5">
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- Left 7 Cols: Master Template Editor -->
+            <div class="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 class="text-sm font-black text-slate-900">Pengaturan Format Template Pesan WhatsApp</h3>
+                  <p class="text-[11px] text-slate-500">Pilih kategori template di bawah ini lalu ubah kalimatnya sesuai gaya komunikasi HM NET.</p>
+                </div>
+                <button type="button" onclick="resetWaTemplatesToDefault()" class="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 rounded-xl text-[11px] font-bold transition flex items-center space-x-1">
+                  <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                  <span>Reset Default</span>
+                </button>
+              </div>
+
+              <!-- Pilihan 6 Kategori Template -->
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1.5">Pilih Template yang Ingin Diubah:</label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <button type="button" onclick="selectMasterTemplateEditor('tagihan')" id="btn-master-tpl-tagihan" class="p-2.5 rounded-xl border text-xs font-bold transition text-left bg-brand-50 text-brand-900 border-brand-400">
+                    📢 1. Tagihan Baru
+                  </button>
+                  <button type="button" onclick="selectMasterTemplateEditor('peringatan')" id="btn-master-tpl-peringatan" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    ⚠️ 2. Pengingat Jatuh Tempo
+                  </button>
+                  <button type="button" onclick="selectMasterTemplateEditor('lunas')" id="btn-master-tpl-lunas" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    🧾 3. Kuitansi Lunas
+                  </button>
+                  <button type="button" onclick="selectMasterTemplateEditor('gangguan')" id="btn-master-tpl-gangguan" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    🚨 4. Info Gangguan
+                  </button>
+                  <button type="button" onclick="selectMasterTemplateEditor('maintenance')" id="btn-master-tpl-maintenance" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    🔧 5. Info Maintenance
+                  </button>
+                  <button type="button" onclick="selectMasterTemplateEditor('normal')" id="btn-master-tpl-normal" class="p-2.5 rounded-xl border text-xs font-semibold transition text-left bg-white text-slate-700 border-slate-200 hover:bg-slate-50">
+                    ✅ 6. Jaringan Normal
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tombol Sisipkan Variabel Otomatis -->
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="text-[11px] font-bold text-slate-700">Klik Variabel untuk Menyisipkan ke Teks Template:</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" onclick="insertTemplateVar('{nama}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {nama}</button>
+                  <button type="button" onclick="insertTemplateVar('{periode}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {periode}</button>
+                  <button type="button" onclick="insertTemplateVar('{paket}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {paket}</button>
+                  <button type="button" onclick="insertTemplateVar('{tagihan}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {tagihan}</button>
+                  <button type="button" onclick="insertTemplateVar('{dibayar}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {dibayar}</button>
+                  <button type="button" onclick="insertTemplateVar('{status}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {status}</button>
+                  <button type="button" onclick="insertTemplateVar('{jatuh_tempo}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {jatuh_tempo}</button>
+                  <button type="button" onclick="insertTemplateVar('{link_bayar}')" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[11px] font-mono font-bold transition">+ {link_bayar}</button>
+                  <button type="button" onclick="insertTemplateVar('{rekening}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {rekening}</button>
+                  <button type="button" onclick="insertTemplateVar('{pon}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {pon}</button>
+                  <button type="button" onclick="insertTemplateVar('{sn}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {sn}</button>
+                  <button type="button" onclick="insertTemplateVar('{alamat}')" class="px-2 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[11px] font-mono font-bold transition">+ {alamat}</button>
+                  <button type="button" onclick="insertTemplateVar('{area_gangguan}')" class="px-2 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-mono font-bold transition">+ {area_gangguan}</button>
+                  <button type="button" onclick="insertTemplateVar('{penyebab_gangguan}')" class="px-2 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-mono font-bold transition">+ {penyebab_gangguan}</button>
+                  <button type="button" onclick="insertTemplateVar('{estimasi_gangguan}')" class="px-2 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-mono font-bold transition">+ {estimasi_gangguan}</button>
+                </div>
+              </div>
+
+              <!-- Textarea Editor Template -->
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label id="lbl-master-tpl-active" class="text-xs font-bold text-slate-800 uppercase">Isi Template: Tagihan Baru</label>
+                  <span class="text-[10px] text-slate-400">Gunakan *teks* untuk huruf tebal di WhatsApp</span>
+                </div>
+                <textarea id="tpl-master-editor" rows="11" oninput="onMasterTemplateInput()" class="w-full text-xs p-3.5 font-mono border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none leading-relaxed text-slate-900"></textarea>
+              </div>
+            </div>
+
+            <!-- Right 5 Cols: Pengaturan Rekening, Jatuh Tempo, WA Gateway & Live Preview -->
+            <div class="lg:col-span-5 space-y-5">
+
+              <!-- Card Info Pembayaran & Jatuh Tempo -->
+              <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div class="flex items-center space-x-2">
+                    <i data-lucide="landmark" class="w-4 h-4 text-brand-600"></i>
+                    <h3 class="text-sm font-bold text-slate-900">Pengaturan Rekening, QRIS & Link Pembayaran</h3>
+                  </div>
+                  <button type="button" onclick="openCustomerPayPortal()" class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold transition">
+                    🔗 Uji Halaman Link Bayar
+                  </button>
+                </div>
+
+                <!-- Detail Nomor Rekening untuk Portal Link Bayar -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Rekening Mandiri (No & Atas Nama):</label>
+                    <input type="text" id="tpl-bank-bca" oninput="onMasterTemplateInput()" placeholder="1840005969488 a.n HM NET" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Rekening BRI (No & Atas Nama):</label>
+                    <input type="text" id="tpl-bank-bri" oninput="onMasterTemplateInput()" placeholder="592801012731509 a.n HM NET" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">DANA & LinkAja:</label>
+                    <input type="text" id="tpl-ewallet-info" oninput="onMasterTemplateInput()" placeholder="DANA: 085691693286 | LinkAja: 085691693286" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">No. WA Admin Penerima Bukti:</label>
+                    <input type="text" id="tpl-admin-wa" oninput="onMasterTemplateInput()" placeholder="085691693286" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-mono font-bold text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Alamat Website Online / Vercel (Opsional — Otomatis Terisi Saat Online):</label>
+                    <input type="text" id="tpl-public-domain" oninput="onMasterTemplateInput()" placeholder="Contoh: https://hm-net-billing.vercel.app (Kosongkan jika otomatis)" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-mono font-bold text-emerald-800 focus:bg-white focus:outline-none">
+                  </div>
+                </div>
+
+                <!-- Upload Gambar QRIS & Kode Unik -->
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold text-slate-700">Gambar Barcode QRIS HM NET (Opsional):</label>
+                    <label class="px-2.5 py-1 bg-white hover:bg-brand-50 text-brand-700 border border-slate-300 rounded-lg text-[10px] font-bold cursor-pointer transition">
+                      <span>📤 Upload Gambar QRIS</span>
+                      <input type="file" accept="image/*" class="hidden" onchange="handleUploadQrisImage(event)">
+                    </label>
+                  </div>
+                  <p id="tpl-qris-status-hint" class="text-[10px] text-slate-500">Jika belum di-upload, halaman link bayar otomatis menampilkan QRIS interaktif HM NET.</p>
+                  <label class="flex items-center space-x-2 text-xs text-slate-700 font-semibold pt-1 cursor-pointer">
+                    <input type="checkbox" id="tpl-use-unique-code" onchange="onMasterTemplateInput()" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <span>Aktifkan Kode Unik Pelanggan (Contoh: Rp 150.001) agar mudah cek mutasi</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Teks Ringkasan Rekening di Pesan WA (<code class="text-brand-600">{rekening}</code>):</label>
+                  <textarea id="tpl-payment-info" rows="3" oninput="onMasterTemplateInput()" class="w-full text-xs p-3 font-mono border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none text-slate-800" placeholder="🏦 *BCA*: 123-456-7890 (a.n HM NET)..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Batas Jatuh Tempo (<code class="text-brand-600">{jatuh_tempo}</code>):</label>
+                    <input type="text" id="tpl-due-date-day" oninput="onMasterTemplateInput()" value="Tanggal 10" placeholder="Contoh: Tanggal 10" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Token API Fonnte (Opsional):</label>
+                    <input type="password" id="tpl-fonnte-token" placeholder="Kosongkan jika pakai WA Web" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-mono text-slate-800 focus:bg-white focus:outline-none">
+                  </div>
+                </div>
+
+                <button type="button" onclick="saveAllWaTemplates()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-black shadow-md shadow-brand-600/20 transition flex items-center justify-center space-x-2">
+                  <i data-lucide="save" class="w-4 h-4"></i>
+                  <span>Simpan Semua Pengaturan Template & Pembayaran</span>
+                </button>
+              </div>
+
+              <!-- Live Preview Box -->
+              <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-slate-800 uppercase flex items-center space-x-1.5">
+                    <i data-lucide="eye" class="w-4 h-4 text-emerald-600"></i>
+                    <span>Pratinjau Hasil Pesan (Contoh Pelanggan)</span>
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded font-semibold">Live Preview</span>
+                </div>
+                <div id="tpl-master-live-preview" class="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl text-xs font-mono whitespace-pre-wrap text-slate-800 leading-relaxed max-h-64 overflow-y-auto"></div>
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
 
       </section>
@@ -1480,10 +2274,10 @@
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Metode Bayar</label>
             <select id="pay-method" class="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:outline-none">
               <option value="Cash / Tunai">Cash / Tunai</option>
-              <option value="Transfer BCA">Transfer BCA</option>
-              <option value="Transfer BRI">Transfer BRI</option>
               <option value="Transfer Mandiri">Transfer Mandiri</option>
-              <option value="QRIS / E-Wallet">QRIS / E-Wallet</option>
+              <option value="Transfer BRI">Transfer BRI</option>
+              <option value="DANA / LinkAja">DANA / LinkAja</option>
+              <option value="QRIS">QRIS / E-Wallet</option>
             </select>
           </div>
         </div>
@@ -1663,16 +2457,25 @@
 
         <!-- Pilihan Template Pesan -->
         <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Pilihan Format Template Pesan</label>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-bold text-slate-700 uppercase">Pilihan Format Template Pesan</label>
+            <button type="button" onclick="closeModalWhatsApp(); openBroadcastSubtab('templates');" class="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition flex items-center space-x-1">
+              <i data-lucide="file-edit" class="w-3.5 h-3.5"></i>
+              <span>Ubah Template & Rekening</span>
+            </button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button type="button" onclick="selectWaTemplate('tagihan')" id="btn-tpl-tagihan" class="wa-tpl-btn p-2 rounded-xl border text-xs font-bold transition text-center bg-emerald-50 text-emerald-800 border-emerald-300">
               📢 Tagihan Baru
             </button>
             <button type="button" onclick="selectWaTemplate('peringatan')" id="btn-tpl-peringatan" class="wa-tpl-btn p-2 rounded-xl border text-xs font-semibold transition text-center text-slate-600 hover:bg-slate-50">
-              ⚠️ Pengingat Jatuh Tempo
+              ⚠️ Jatuh Tempo
             </button>
             <button type="button" onclick="selectWaTemplate('lunas')" id="btn-tpl-lunas" class="wa-tpl-btn p-2 rounded-xl border text-xs font-semibold transition text-center text-slate-600 hover:bg-slate-50">
               🧾 Kuitansi Lunas
+            </button>
+            <button type="button" onclick="selectWaTemplate('gangguan')" id="btn-tpl-gangguan" class="wa-tpl-btn p-2 rounded-xl border text-xs font-semibold transition text-center text-slate-600 hover:bg-slate-50">
+              🚨 Info Gangguan
             </button>
           </div>
         </div>
@@ -1684,23 +2487,50 @@
             <span class="text-[10px] text-slate-400">Gunakan *teks* untuk tebal</span>
           </div>
           <textarea id="wa-message-text" rows="8" class="w-full text-xs p-3 font-mono border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none leading-relaxed text-slate-800"></textarea>
+
+          <!-- Kotak Link Pembayaran Aktif yang Bisa Langsung Diklik / Dipencet -->
+          <div class="mt-2.5 p-3 bg-emerald-50 border-2 border-emerald-400 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+            <div class="min-w-0 flex-1">
+              <div class="text-[10px] font-black uppercase text-emerald-800 flex items-center space-x-1">
+                <span>🔗 Link Pembayaran Pelanggan (Klik / Pencet Link Biru di Bawah):</span>
+              </div>
+              <a id="wa-clickable-pay-link" href="#" onclick="openCustomerPayPortalFromWaModal(); return false;" class="text-xs font-mono font-extrabold text-blue-600 hover:text-blue-800 underline break-all block mt-0.5 cursor-pointer">
+                Klik di sini untuk membuka Halaman Pembayaran Pelanggan
+              </a>
+            </div>
+            <button type="button" onclick="openCustomerPayPortalFromWaModal()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs shrink-0 transition flex items-center justify-center space-x-1">
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+              <span>Buka Link Bayar</span>
+            </button>
+          </div>
         </div>
 
         <!-- Rekening Pembayaran HM NET -->
         <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
-          <div class="font-bold text-slate-800">💡 Info Pembayaran Resmi HM NET:</div>
-          <div>• Transfer Bank: <strong>BCA 123-456-7890</strong> a.n HM NET</div>
-          <div>• Transfer BRI: <strong>BRI 0987-654-321</strong> a.n HM NET</div>
-          <div>• Tunai / Cash: Langsung ke kantor atau teknisi HM NET saat kunjungan</div>
+          <div class="flex items-center justify-between">
+            <div class="font-bold text-slate-800">💡 Info Pembayaran Resmi HM NET:</div>
+            <button type="button" onclick="closeModalWhatsApp(); openBroadcastSubtab('templates');" class="text-[10px] font-bold text-brand-600 hover:underline">Edit Rekening</button>
+          </div>
+          <div id="wa-modal-payment-info-content" class="whitespace-pre-line leading-relaxed text-slate-600">🏦 Mandiri: 1840005969488 (a.n HM NET)
+🏦 BRI: 592801012731509 (a.n HM NET)
+👛 DANA: 085691693286 (a.n HM NET)
+👛 LinkAja: 085691693286 (a.n HM NET)
+💵 Tunai / Cash: Langsung ke kantor atau teknisi HM NET saat kunjungan</div>
         </div>
       </div>
 
       <!-- Action buttons -->
-      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-        <button type="button" onclick="copyWaMessageToClipboard()" class="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-2xs">
-          <i data-lucide="copy" class="w-4 h-4 text-slate-600"></i>
-          <span id="btn-copy-label">Salin Teks Pesan</span>
-        </button>
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="copyWaMessageToClipboard()" class="px-3 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-2xs">
+            <i data-lucide="copy" class="w-4 h-4 text-slate-600"></i>
+            <span id="btn-copy-label">Salin Pesan</span>
+          </button>
+          <button type="button" onclick="openCustomerPayPortalFromWaModal()" class="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition flex items-center space-x-1.5" title="Lihat tampilan halaman link pembayaran yang akan dibuka pelanggan">
+            <i data-lucide="external-link" class="w-4 h-4 text-emerald-600"></i>
+            <span>Lihat Link Bayar</span>
+          </button>
+        </div>
 
         <div class="flex space-x-2">
           <button type="button" onclick="closeModalWhatsApp()" class="px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">Batal</button>
@@ -1713,6 +2543,82 @@
     </div>
   </div>
 
+  <!-- ========================================================= -->
+  <!-- MODAL: ANTREAN PENGIRIMAN PESAN SERENTAK (BULK BROADCAST) -->
+  <!-- ========================================================= -->
+  <div id="modal-broadcast-queue" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div id="bcast-queue-header" class="px-6 py-4 bg-emerald-700 text-white flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-white/15 text-white flex items-center justify-center">
+            <i data-lucide="send" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 id="bcast-queue-title" class="text-sm font-black">Pengiriman Pesan WhatsApp Serentak</h3>
+            <p id="bcast-queue-subtitle" class="text-[11px] text-emerald-100">Siap mengirim pesan ke pelanggan yang diceklis</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModalBroadcastQueue()" class="text-white/80 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Progress Bar & Active Target Highlight -->
+      <div class="p-5 bg-slate-50 border-b border-slate-200 space-y-3 shrink-0">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-700">Progress Pengiriman Serentak:</span>
+          <span id="bcast-queue-progress-text" class="font-black text-emerald-700">0 / 0 Terkirim (0%)</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+          <div id="bcast-queue-progress-bar" class="h-full bg-emerald-600 transition-all duration-300" style="width: 0%"></div>
+        </div>
+
+        <!-- Primary One-Click Sequential Sender Box -->
+        <div class="p-4 bg-white rounded-2xl border-2 border-emerald-500 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-black uppercase tracking-wider text-emerald-700">Target Antrean Berikutnya:</div>
+            <div id="bcast-next-customer-label" class="text-sm font-black text-slate-900 mt-0.5">-</div>
+            <div id="bcast-next-customer-sub" class="text-[11px] text-slate-500">Klik tombol di samping untuk membuka WA pelanggan ini & lanjut otomatis ke pelanggan berikutnya.</div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" id="btn-bcast-send-next" onclick="sendNextInBroadcastQueue()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center space-x-1.5">
+              <i data-lucide="external-link" class="w-4 h-4"></i>
+              <span id="btn-bcast-send-next-label">Kirim Berikutnya (1 Klik)</span>
+            </button>
+            <button type="button" id="btn-bcast-auto-play" onclick="toggleBroadcastAutoSend()" class="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5" title="Buka WhatsApp otomatis berurutan tiap 3 detik">
+              <i data-lucide="play" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span id="btn-bcast-auto-label">Kirim Otomatis Beruntun</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue List of Selected Customers -->
+      <div class="p-5 overflow-y-auto flex-1 space-y-2.5" id="bcast-queue-list">
+        <!-- Populated via JS -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 text-xs">
+        <div id="bcast-api-status-hint" class="text-[11px] text-slate-500">
+          💡 Tips: Gunakan <strong>Kirim Berikutnya (1 Klik)</strong> agar tidak terkena blokir pop-up browser.
+        </div>
+        <div class="flex items-center space-x-2">
+          <button type="button" id="btn-bcast-api-all" onclick="sendBroadcastViaFonnteApi()" class="hidden px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+            <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+            <span>Kirim Sekaligus via API Fonnte</span>
+          </button>
+          <button type="button" onclick="closeModalBroadcastQueue()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition">
+            Selesai / Tutup
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
     <div class="bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-3 text-xs font-semibold border border-slate-700">
@@ -1722,7 +2628,7 @@
   </div>
 
   <!-- External Application Logic Script -->
-  <script src="app.js?v=20261105_v3"></script>
+  <script src="app.js?v=20261107_v7"></script>
 
   <script>
     // Initialize Lucide icons on start
