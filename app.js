@@ -37,7 +37,7 @@ const DEFAULT_MODEM_TYPES = [
 const DEFAULT_ADMIN = null;
 
 // Default dummy account (admin/admin123) dimatikan permanen.
-// Akun resmi HM NET (himanet) disertakan secara bawaan agar langsung bisa login di semua HP/perangkat.
+// Akun resmi HM NET disertakan secara bawaan & tersinkron otomatis dengan Cloud.
 const DEFAULT_USERS = [
   {
     id: 'u-admin-himanet',
@@ -61,6 +61,54 @@ const DEFAULT_USERS = [
       keuangan_edit: true,
       backup_data: true,
       manage_users: true
+    }
+  },
+  {
+    id: 'u-sync-izza',
+    username: 'izza',
+    password: 'izzasayang',
+    name: 'Bu Bos HMNET',
+    role: 'KASIR',
+    roleLabel: 'Kasir & Tagihan',
+    isParent: false,
+    status: 'AKTIF',
+    createdAt: '2026-03-01',
+    permissions: {
+      dashboard: true,
+      pelanggan_view: true,
+      pelanggan_edit: false,
+      pelanggan_delete: false,
+      tagihan_view: true,
+      tagihan_edit: true,
+      tagihan_wa: true,
+      keuangan_view: false,
+      keuangan_edit: false,
+      backup_data: false,
+      manage_users: false
+    }
+  },
+  {
+    id: 'u-sync-izzaa',
+    username: 'izzaa',
+    password: 'izzacantik',
+    name: 'Ayang',
+    role: 'CUSTOM',
+    roleLabel: 'Staf Kustom',
+    isParent: false,
+    status: 'AKTIF',
+    createdAt: '2026-11-07',
+    permissions: {
+      dashboard: true,
+      pelanggan_view: true,
+      pelanggan_edit: false,
+      pelanggan_delete: false,
+      tagihan_view: true,
+      tagihan_edit: false,
+      tagihan_wa: false,
+      keuangan_view: false,
+      keuangan_edit: false,
+      backup_data: false,
+      manage_users: false
     }
   }
 ];
@@ -268,18 +316,21 @@ function getUsersList() {
     modified = true;
   }
 
-  // Pastikan akun resmi bawaan (DEFAULT_USERS: himanet) selalu tersedia di HP/perangkat baru
+  // Pastikan akun resmi bawaan (DEFAULT_USERS: himanet, izza, izzaa) tersedia di HP/perangkat baru
   if (Array.isArray(DEFAULT_USERS) && DEFAULT_USERS.length > 0) {
-    DEFAULT_USERS.forEach(defUser => {
-      const exists = users.some(
-        u => u.id === defUser.id || String(u.username || '').toLowerCase() === defUser.username.toLowerCase()
-      );
-      const hasAnyParent = users.some(u => u.isParent);
-      if (!exists && (!defUser.isParent || !hasAnyParent)) {
-        users.unshift({ ...defUser, permissions: { ...defUser.permissions } });
-        modified = true;
-      }
-    });
+    const alreadySeeded = localStorage.getItem('hmnet_users_seeded_v17');
+    if (users.length === 0 || !alreadySeeded) {
+      DEFAULT_USERS.forEach(defUser => {
+        const exists = users.some(
+          u => u.id === defUser.id || String(u.username || '').toLowerCase() === defUser.username.toLowerCase()
+        );
+        if (!exists) {
+          users.push({ ...defUser, permissions: { ...defUser.permissions } });
+          modified = true;
+        }
+      });
+      localStorage.setItem('hmnet_users_seeded_v17', '1');
+    }
   }
 
   // Pastikan jika ada akun terdaftar, minimal akun Induk pertama memiliki akses Admin Utama (manage_users)
@@ -317,21 +368,7 @@ function getUsersList() {
 }
 
 function getUsersUpdatedAt() {
-  const val = Number(localStorage.getItem(STORAGE_KEYS.USERS_UPDATED_AT) || 0);
-  if (val > 0) return val;
-  try {
-    const rawUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
-    const rawSession = JSON.parse(localStorage.getItem(STORAGE_KEYS.AUTH_SESSION) || 'null');
-    if (
-      (Array.isArray(rawUsers) && rawUsers.length > 1) ||
-      (rawSession && rawSession.permissions && rawSession.permissions.manage_users)
-    ) {
-      const now = Date.now();
-      localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(now));
-      return now;
-    }
-  } catch (e) {}
-  return 0;
+  return Number(localStorage.getItem(STORAGE_KEYS.USERS_UPDATED_AT) || 0);
 }
 
 function saveUsersList(users, syncCloud = true, customUpdatedAt = null) {
@@ -436,11 +473,8 @@ function pushCloudSync(immediate = false) {
     try {
       const users = getUsersList();
       if (!users || users.length === 0) return false;
-      let updatedAt = getUsersUpdatedAt();
-      if (!updatedAt) {
-        updatedAt = Date.now();
-        localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(updatedAt));
-      }
+      const updatedAt = Date.now();
+      localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(updatedAt));
       const compactStr = encodeUsersCompact(users);
 
       const ntfyPromise = fetchWithTimeout('https://ntfy.sh', {
@@ -522,13 +556,7 @@ async function pullCloudSync() {
 
     await Promise.allSettled([ntfyFetch, restFetch]);
 
-    const localUsers = getUsersList();
-    const localTime = getUsersUpdatedAt();
-
     if (candidates.length === 0) {
-      if (localTime > 0 && (localUsers.length > 1 || state.currentUser?.permissions?.manage_users)) {
-        await pushCloudSync(true);
-      }
       return false;
     }
 
@@ -538,14 +566,7 @@ async function pullCloudSync() {
     const cloudTime = bestCloud.t;
     const cloudUsers = bestCloud.users;
 
-    // Jika perangkat ini (misal Laptop Admin) punya data akun yang lebih baru dibanding Cloud -> dorong ke Cloud!
-    if (localTime > cloudTime && (localUsers.length > 1 || state.currentUser?.permissions?.manage_users)) {
-      await pushCloudSync(true);
-      return false;
-    }
-
-    // Jika Cloud lebih baru (atau perangkat ini adalah HP lain yang belum sinkron) -> perbarui daftar akun penuh dari Cloud!
-    if (cloudTime > localTime || (localTime === 0 && cloudUsers.length > 0)) {
+    if (cloudUsers.length > 0) {
       saveUsersList(cloudUsers, false, cloudTime);
 
       // Jika pengguna sedang login di perangkat ini, sinkronkan status & hak aksesnya secara langsung
