@@ -33,87 +33,20 @@ const DEFAULT_MODEM_TYPES = [
   { name: 'GPON Huawei HG8245H5', color: 'blue' }
 ];
 
-const DEFAULT_ADMIN = {
-  username: 'admin',
-  password: 'admin123',
-  name: 'Admin HM NET',
-  role: 'Pengelola Utama (Full Access)'
-};
+const DEFAULT_ADMIN = null;
 
-const DEFAULT_USERS = [
-  {
-    id: 'u-admin-root',
-    username: 'admin',
-    password: 'admin123',
-    name: 'Admin Utama (HM NET)',
-    role: 'SUPER_ADMIN',
-    roleLabel: 'Admin Utama (Induk)',
-    isParent: true,
-    status: 'AKTIF',
-    createdAt: '2026-01-01',
-    permissions: {
-      dashboard: true,
-      pelanggan_view: true,
-      pelanggan_edit: true,
-      pelanggan_delete: true,
-      tagihan_view: true,
-      tagihan_edit: true,
-      tagihan_wa: true,
-      keuangan_view: true,
-      keuangan_edit: true,
-      backup_data: true,
-      manage_users: true
-    }
-  },
-  {
-    id: 'u-teknisi-1',
-    username: 'teknisi',
-    password: 'teknisi123',
-    name: 'Rian (Teknisi Lapangan)',
-    role: 'TEKNISI',
-    roleLabel: 'Teknisi Lapangan',
-    isParent: false,
-    status: 'AKTIF',
-    createdAt: '2026-02-15',
-    permissions: {
-      dashboard: true,
-      pelanggan_view: true,
-      pelanggan_edit: true,
-      pelanggan_delete: false,
-      tagihan_view: true,
-      tagihan_edit: false,
-      tagihan_wa: false,
-      keuangan_view: false,
-      keuangan_edit: false,
-      backup_data: false,
-      manage_users: false
-    }
-  },
-  {
-    id: 'u-kasir-1',
-    username: 'kasir',
-    password: 'kasir123',
-    name: 'Dewi (Kasir & Tagihan)',
-    role: 'KASIR',
-    roleLabel: 'Kasir & Tagihan',
-    isParent: false,
-    status: 'AKTIF',
-    createdAt: '2026-03-01',
-    permissions: {
-      dashboard: true,
-      pelanggan_view: true,
-      pelanggan_edit: false,
-      pelanggan_delete: false,
-      tagihan_view: true,
-      tagihan_edit: true,
-      tagihan_wa: true,
-      keuangan_view: false,
-      keuangan_edit: false,
-      backup_data: false,
-      manage_users: false
-    }
-  }
-];
+// Default dummy accounts (admin/admin123, teknisi/teknisi123, kasir/kasir123) dimatikan permanen.
+// Hanya akun yang terdaftar resmi yang diizinkan login.
+const DEFAULT_USERS = [];
+
+function isBlockedDefaultCredential(username, password) {
+  const u = String(username || '').trim().toLowerCase();
+  const p = String(password || '');
+  if (u === 'admin' && (p === 'admin123' || p === 'admin')) return true;
+  if (u === 'teknisi' && p === 'teknisi123') return true;
+  if (u === 'kasir' && p === 'kasir123') return true;
+  return false;
+}
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -228,65 +161,95 @@ let state = {
 // ==========================================
 function getUsersList() {
   const usersJson = localStorage.getItem(STORAGE_KEYS.USERS);
-  let users = null;
+  let users = [];
 
-  if (!usersJson) {
-    // Migrate existing admin account if available
-    users = JSON.parse(JSON.stringify(DEFAULT_USERS));
-    const legacyAdminJson = localStorage.getItem(STORAGE_KEYS.ADMIN_ACCOUNT);
-    if (legacyAdminJson) {
-      try {
-        const legacyAdmin = JSON.parse(legacyAdminJson);
-        if (legacyAdmin.username) {
-          users[0].username = legacyAdmin.username;
-          users[0].password = (legacyAdmin.password && legacyAdmin.password !== 'admin') ? legacyAdmin.password : 'admin123';
-          users[0].name = legacyAdmin.name || users[0].name;
-        }
-      } catch (e) {}
+  if (usersJson) {
+    try {
+      const parsed = JSON.parse(usersJson);
+      if (Array.isArray(parsed)) users = parsed;
+    } catch (e) {
+      users = [];
     }
-    saveUsersList(users);
-    return users;
   }
 
-  try {
-    users = JSON.parse(usersJson);
-  } catch (e) {
-    users = JSON.parse(JSON.stringify(DEFAULT_USERS));
-  }
-
-  // Sanitize & Sync:
-  // 1) Never allow weak "user: admin, pass: admin" in storage
   let modified = false;
+
+  // Check if legacy ADMIN_ACCOUNT had a custom user that wasn't migrated yet
   const legacyAdminJson = localStorage.getItem(STORAGE_KEYS.ADMIN_ACCOUNT);
-  if (legacyAdminJson && !localStorage.getItem('hmnet_legacy_synced_v3')) {
+  if (legacyAdminJson) {
     try {
       const legacyAdmin = JSON.parse(legacyAdminJson);
-      const rootIdx = users.findIndex(u => u.isParent);
-      if (rootIdx !== -1 && legacyAdmin.username && legacyAdmin.username.toLowerCase() !== 'admin' && users[rootIdx].username.toLowerCase() === 'admin') {
-        users[rootIdx].username = legacyAdmin.username;
-        users[rootIdx].password = legacyAdmin.password || users[rootIdx].password;
-        users[rootIdx].name = legacyAdmin.name || users[rootIdx].name;
-        modified = true;
+      if (
+        legacyAdmin &&
+        legacyAdmin.username &&
+        legacyAdmin.password &&
+        !isBlockedDefaultCredential(legacyAdmin.username, legacyAdmin.password)
+      ) {
+        const exists = users.some(u => u.username.toLowerCase() === legacyAdmin.username.toLowerCase());
+        if (!exists) {
+          users.unshift({
+            id: 'u-admin-custom',
+            username: legacyAdmin.username,
+            password: legacyAdmin.password,
+            name: legacyAdmin.name || 'Admin Utama (HM NET)',
+            role: 'SUPER_ADMIN',
+            roleLabel: 'Admin Utama (Induk)',
+            isParent: true,
+            status: 'AKTIF',
+            createdAt: '2026-01-01',
+            permissions: {
+              dashboard: true,
+              pelanggan_view: true,
+              pelanggan_edit: true,
+              pelanggan_delete: true,
+              tagihan_view: true,
+              tagihan_edit: true,
+              tagihan_wa: true,
+              keuangan_view: true,
+              keuangan_edit: true,
+              backup_data: true,
+              manage_users: true
+            }
+          });
+          modified = true;
+        }
       }
-      localStorage.setItem('hmnet_legacy_synced_v3', '1');
     } catch (e) {}
   }
 
-  const customSuperAdmins = users.filter(u => u.username.toLowerCase() !== 'admin' && u.status === 'AKTIF' && u.permissions?.manage_users);
+  // Hapus permanen semua akun bawaan/default (admin/admin123, admin/admin, teknisi/teknisi123, kasir/kasir123)
+  const beforeCount = users.length;
+  users = users.filter(u => !isBlockedDefaultCredential(u.username, u.password));
+  if (users.length !== beforeCount) {
+    modified = true;
+  }
 
-  users.forEach(u => {
-    if (u.username.toLowerCase() === 'admin' && u.password === 'admin') {
-      // Upgrade weak "admin / admin" password
-      u.password = 'admin123';
+  // Pastikan jika ada akun terdaftar, minimal akun terdaftar pertama memiliki akses Admin Utama (manage_users)
+  // agar pemilik sistem bisa mengelola akun sepenuhnya setelah akun default 'admin' dihapus.
+  if (users.length > 0) {
+    const hasActiveSuperAdmin = users.some(u => u.status === 'AKTIF' && u.permissions?.manage_users);
+    if (!hasActiveSuperAdmin) {
+      const firstActive = users.find(u => u.status === 'AKTIF') || users[0];
+      firstActive.status = 'AKTIF';
+      firstActive.isParent = true;
+      firstActive.role = 'SUPER_ADMIN';
+      firstActive.roleLabel = 'Admin Utama (Induk)';
+      firstActive.permissions = {
+        dashboard: true,
+        pelanggan_view: true,
+        pelanggan_edit: true,
+        pelanggan_delete: true,
+        tagihan_view: true,
+        tagihan_edit: true,
+        tagihan_wa: true,
+        keuangan_view: true,
+        keuangan_edit: true,
+        backup_data: true,
+        manage_users: true
+      };
       modified = true;
     }
-    // If user already created their own custom Super Admin, auto-disable leftover default "admin" once
-    if (u.username.toLowerCase() === 'admin' && customSuperAdmins.length > 0 && !localStorage.getItem('hmnet_default_admin_disabled_v3')) {
-      u.status = 'NONAKTIF';
-      localStorage.setItem('hmnet_default_admin_disabled_v3', '1');
-      modified = true;
-    }
-  });
+  }
 
   if (modified) {
     saveUsersList(users);
@@ -297,15 +260,16 @@ function getUsersList() {
 
 function saveUsersList(users) {
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  // Keep legacy admin key synced with root admin
   const rootAdmin = users.find(u => u.isParent) || users[0];
-  if (rootAdmin) {
+  if (rootAdmin && !isBlockedDefaultCredential(rootAdmin.username, rootAdmin.password)) {
     saveAdminAccount({
       username: rootAdmin.username,
       password: rootAdmin.password,
       name: rootAdmin.name,
       role: rootAdmin.roleLabel || 'Pengelola Utama (Full Access)'
     });
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.ADMIN_ACCOUNT);
   }
 }
 
@@ -320,7 +284,7 @@ function getAdminAccount() {
       role: rootAdmin.roleLabel || 'Pengelola Utama (Full Access)'
     };
   }
-  return DEFAULT_ADMIN;
+  return { username: '', password: '', name: 'Admin HM NET', role: 'Pengelola Utama' };
 }
 
 function saveAdminAccount(account) {
@@ -332,12 +296,23 @@ function checkAuthSession() {
   if (sessionJson) {
     try {
       const savedUser = JSON.parse(sessionJson);
+      if (isBlockedDefaultCredential(savedUser.username, savedUser.password)) {
+        localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+        state.currentUser = null;
+        showLoginView();
+        return false;
+      }
       const users = getUsersList();
-      const current = users.find(u => u.username.toLowerCase() === savedUser.username.toLowerCase());
+      const current = users.find(
+        u => u.username.toLowerCase() === String(savedUser.username || '').toLowerCase() &&
+             u.password === savedUser.password
+      );
       if (current && current.status === 'AKTIF') {
         state.currentUser = current;
         showAppView();
         return true;
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
       }
     } catch (e) {
       state.currentUser = null;
@@ -461,11 +436,11 @@ function handleLogin(e) {
   const errorAlert = document.getElementById('login-error-alert');
   const errorText = document.getElementById('login-error-text');
 
-  // Tolak kombinasi lemah "user: admin, pass: admin" secara mutlak
-  if (usernameInput === 'admin' && passwordInput === 'admin') {
+  // Tolak mutlak semua akun bawaan/default (admin/admin123, admin/admin, teknisi/teknisi123, kasir/kasir123)
+  if (isBlockedDefaultCredential(usernameInput, passwordInput)) {
     if (errorAlert) {
       errorAlert.classList.remove('hidden');
-      errorText.textContent = 'Login default (user: admin, pass: admin) telah dinonaktifkan demi keamanan sistem!';
+      errorText.textContent = 'Akses Ditolak! Akun default (admin / admin123) telah dimatikan permanen. Hanya akun resmi yang terdaftar yang dapat login!';
     }
     if (window.lucide) lucide.createIcons();
     return;
@@ -477,7 +452,7 @@ function handleLogin(e) {
   if (!user) {
     if (errorAlert) {
       errorAlert.classList.remove('hidden');
-      errorText.textContent = 'Username atau Password salah! Periksa kembali data login Anda.';
+      errorText.textContent = 'Akses Ditolak! Akun tidak terdaftar atau Username/Password salah.';
     }
     if (window.lucide) lucide.createIcons();
     return;
@@ -486,7 +461,7 @@ function handleLogin(e) {
   if (user.status !== 'AKTIF') {
     if (errorAlert) {
       errorAlert.classList.remove('hidden');
-      errorText.textContent = 'Akun Anda dinonaktifkan oleh Admin Utama. Hubungi Admin Induk untuk membuka akses.';
+      errorText.textContent = 'Akun ini telah dinonaktifkan. Hanya akun terdaftar yang aktif yang dapat login.';
     }
     if (window.lucide) lucide.createIcons();
     return;
@@ -726,35 +701,55 @@ function loadData() {
     }
   }
 
-  // One-time automatic import of the 48 real HM NET customers (from data_pelanggan.xlsx)
-  if (!localStorage.getItem('hmnet_real_48_customers_v10')) {
-    const dummyPhones = new Set(['081234567891', '085798765432', '082155443322', '081399887766', '089876543210']);
-    const prevCustomers = Array.isArray(state.customers) ? state.customers : [];
+  // Safe non-destructive merge of the 48 real HM NET customers:
+  // Preserves 100% of any customers, edits, phone numbers, modem types, and bill payments already created by the user!
+  if (!localStorage.getItem('hmnet_real_48_customers_merged_v11')) {
+    const fakeSampleSns = new Set(['fhbb883921aa', 'zteg778844ff', 'hwtc11223344']);
+    const prevCustomers = (Array.isArray(state.customers) ? state.customers : []).filter(
+      c => !fakeSampleSns.has(String(c.sn || '').toLowerCase())
+    );
 
-    state.customers = INITIAL_CUSTOMERS.map(realCust => {
-      const match = prevCustomers.find(
+    const mergedCustomers = [...prevCustomers];
+    INITIAL_CUSTOMERS.forEach(realCust => {
+      const existingIdx = mergedCustomers.findIndex(
         p => (p.sn && p.sn.toLowerCase() === realCust.sn.toLowerCase()) ||
              (p.name && p.name.toLowerCase() === realCust.name.toLowerCase())
       );
-      const keepPhone = match && match.phone && !dummyPhones.has(match.phone) ? match.phone : realCust.phone;
-      const keepAddr = match && match.address && !['Jl. Utama RT 01 RW 01', 'Gang Mawar No. 12'].includes(match.address) ? match.address : realCust.address;
-      return {
-        ...realCust,
-        phone: keepPhone || '',
-        address: keepAddr || ''
-      };
+      if (existingIdx === -1) {
+        mergedCustomers.push({ ...realCust });
+      }
     });
+
+    state.customers = mergedCustomers;
     saveCustomers();
 
-    // Refresh modem types list so XPON ZTE F663NV9 & XPON GGCLink G699 are included
-    localStorage.removeItem(STORAGE_KEYS.MODEM_TYPES);
+    // Ensure modem types list includes all customer modem types without deleting user's custom modem types
     getModemTypesList();
 
-    // Generate clean bills for all 48 real customers
-    state.bills = generateSampleBills(state.customers);
-    saveBills();
+    // Only add missing bills for customers that don't have a bill yet (never overwrite existing bill payments!)
+    let billsModified = false;
+    state.customers.forEach(c => {
+      const hasBill = state.bills.some(b => b.customerId === c.id && b.year === 2026 && b.month === 11);
+      if (!hasBill) {
+        const isFree = Number(c.price) === 0;
+        state.bills.push({
+          id: `bill-${c.id}-2026-11`,
+          customerId: c.id,
+          year: 2026,
+          month: 11,
+          tariff: c.price,
+          amountPaid: 0,
+          status: isFree ? 'LUNAS' : 'BELUM',
+          paymentDate: isFree ? '2026-11-01' : '',
+          paymentMethod: isFree ? 'Gratis / Free' : '',
+          notes: isFree ? 'Langganan 1 Mbps (-)' : ''
+        });
+        billsModified = true;
+      }
+    });
+    if (billsModified) saveBills();
 
-    localStorage.setItem('hmnet_real_48_customers_v10', '1');
+    localStorage.setItem('hmnet_real_48_customers_merged_v11', '1');
   }
 }
 
@@ -2609,12 +2604,15 @@ function deleteExpense(expId) {
 function exportDataJSON() {
   const exportPayload = {
     app: 'HM NET Billing System',
-    version: '1.1',
+    version: '1.2',
     exportedAt: new Date().toISOString(),
     customers: state.customers,
     bills: state.bills,
     expenses: state.expenses,
-    waTemplates: getWaTemplates()
+    waTemplates: getWaTemplates(),
+    modemTypes: getModemTypesList(),
+    redamanConfig: getRedamanConfig(),
+    users: getUsersList()
   };
 
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportPayload, null, 2));
@@ -2644,6 +2642,15 @@ function importDataJSON(event) {
         saveExpenses();
         if (data.waTemplates) {
           saveWaTemplates(data.waTemplates);
+        }
+        if (Array.isArray(data.modemTypes) && data.modemTypes.length > 0) {
+          saveModemTypesList(data.modemTypes);
+        }
+        if (data.redamanConfig) {
+          saveRedamanConfig(data.redamanConfig);
+        }
+        if (Array.isArray(data.users) && data.users.length > 0) {
+          saveUsersList(data.users.filter(u => !isBlockedDefaultCredential(u.username, u.password)));
         }
         initApp();
         showToast('Database berhasil dipulihkan dari backup!');
@@ -3114,8 +3121,8 @@ function saveUserAccount(e) {
     return;
   }
 
-  if (username === 'admin' && password === 'admin') {
-    alert('Demi keamanan sistem, kombinasi username "admin" dengan password "admin" tidak diizinkan!');
+  if (isBlockedDefaultCredential(username, password)) {
+    alert('Demi keamanan sistem, kombinasi akun default (admin/admin123, teknisi/teknisi123, kasir/kasir123) telah dimatikan dan tidak diizinkan!');
     document.getElementById('user-form-password').focus();
     return;
   }
