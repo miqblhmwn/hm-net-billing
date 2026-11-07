@@ -15,15 +15,15 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_MODEM_TYPES = [
-  { name: 'GPON Fiberhome HG6145D2', color: 'amber' },
-  { name: 'GPON Fiberhome HG6145F', color: 'amber' },
   { name: 'GPON ZTE F6600PV9', color: 'green' },
   { name: 'GPON ZTE F670L', color: 'green' },
+  { name: 'GPON Fiberhome HG6145D2', color: 'amber' },
+  { name: 'GPON Fiberhome HG6145F', color: 'amber' },
   { name: 'XPON ZTE F663NV3A', color: 'fuchsia' },
+  { name: 'XPON ZTE F663NV9', color: 'fuchsia' },
+  { name: 'XPON GGCLink G699', color: 'cyan' },
   { name: 'GPON ZTE F609', color: 'green' },
-  { name: 'GPON Huawei HG8245H5', color: 'blue' },
-  { name: 'XPON GGCLink', color: 'cyan' },
-  { name: 'EPON / XPON HIOSO', color: 'slate' }
+  { name: 'GPON Huawei HG8245H5', color: 'blue' }
 ];
 
 const DEFAULT_ADMIN = {
@@ -113,83 +113,56 @@ const MONTH_NAMES = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
-// Initial Sample Data (Representing sample data from design document)
+// Initial Customer Data (48 Real HM NET Customers)
 const INITIAL_CUSTOMERS = [
-  {
-    id: 'c-1',
-    name: 'Falah',
-    phone: '081234567891',
-    address: 'Jl. Utama RT 01 RW 01',
-    modemType: 'GPON ZTE F6600PV9',
-    sn: 'ZTEGd3be73c7',
-    ontStatus: 'NEW',
-    pon: '1',
-    redaman: -18.4,
-    speed: '10 Mbps',
-    price: 150000,
-    status: 'AKTIF',
-    installedDate: '2026-01-15'
-  },
-  {
-    id: 'c-2',
-    name: 'Agung',
-    phone: '085798765432',
-    address: 'Gang Mawar No. 12',
-    modemType: 'GPON ZTE F670L',
-    sn: 'GGCLcb556b34',
-    ontStatus: 'SECOND',
-    pon: '2',
-    redaman: -24.8,
-    speed: '8 Mbps',
-    price: 100000,
-    status: 'AKTIF',
-    installedDate: '2026-02-10'
-  },
-  {
-    id: 'c-3',
-    name: 'Pak Rudi',
-    phone: '082155443322',
-    address: 'Ujung Jalur PON 1',
-    modemType: 'GPON Fiberhome HG6145D2',
-    sn: 'FHBB883921AA',
-    ontStatus: 'GANTI',
-    pon: '1',
-    redaman: -28.2,
-    speed: '12 Mbps',
-    price: 175000,
-    status: 'AKTIF',
-    installedDate: '2026-03-05'
-  },
-  {
-    id: 'c-4',
-    name: 'Bu Siti Khodijah',
-    phone: '081399887766',
-    address: 'Kompleks HM Net Blok B',
-    modemType: 'GPON Fiberhome HG6145F',
-    sn: 'ZTEG778844FF',
-    ontStatus: 'NEW',
-    pon: '2',
-    redaman: -21.0,
-    speed: '10 Mbps',
-    price: 150000,
-    status: 'AKTIF',
-    installedDate: '2026-04-01'
-  },
-  {
-    id: 'c-5',
-    name: 'Mas Dedi Warnet',
-    phone: '089876543210',
-    address: 'Dekat Tiang ODP 04',
-    modemType: 'XPON ZTE F663NV3A',
-    sn: 'HWTC11223344',
-    ontStatus: 'NEW',
-    pon: '1',
-    redaman: -17.5,
-    speed: '30 Mbps',
-    price: 350000,
-    status: 'AKTIF',
-    installedDate: '2026-01-20'
-  }
+  { id: 'c-1', name: 'Falah', phone: '', address: '', modemType: 'GPON ZTE F6600PV9', sn: 'ZTEGd3be73c7', ontStatus: 'NEW', pon: '2', redaman: -14.8, speed: '20 Mbps', price: 150000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-2', name: 'Siril', phone: '', address: '', modemType: 'GPON ZTE F670L', sn: 'ZTEGd1dee05c', ontStatus: 'NEW', pon: '1', redaman: -16.8, speed: '10 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-3', name: 'Masyito', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc180531f', ontStatus: 'NEW', pon: '2', redaman: -20.5, speed: '1 Mbps', price: 0, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-4', name: 'Yahya', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc180613c', ontStatus: 'NEW', pon: '2', redaman: -19.4, speed: '8 Mbps', price: 50000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-5', name: 'Ratna', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc1806f83', ontStatus: 'NEW', pon: '1', redaman: -20.8, speed: '6 Mbps', price: 75000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-6', name: 'Silfia', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc1807614', ontStatus: 'NEW', pon: '1', redaman: -13.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-7', name: 'Galih', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc18058d1', ontStatus: 'NEW', pon: '1', redaman: -20.1, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-8', name: 'Zainal', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc18079ef', ontStatus: 'NEW', pon: '2', redaman: -23.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-9', name: 'Eva Toko', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc18061b7', ontStatus: 'NEW', pon: '2', redaman: -18.2, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-10', name: 'Ramadhan', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc18079f5', ontStatus: 'NEW', pon: '1', redaman: -13.9, speed: '10 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-11', name: 'Indra', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc1806f89', ontStatus: 'NEW', pon: '2', redaman: -16.4, speed: '10 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-12', name: 'Angga', phone: '', address: '', modemType: 'GPON Fiberhome HG6145D2', sn: 'FHTTc18060fe', ontStatus: 'NEW', pon: '2', redaman: -11.7, speed: '30 Mbps', price: 300000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-13', name: 'Putra', phone: '', address: '', modemType: 'GPON Fiberhome HG6145F', sn: 'FHTT999ce590', ontStatus: 'NEW', pon: '1', redaman: -22.2, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-14', name: 'Ajeng', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb6f0e0a', ontStatus: 'NEW', pon: '1', redaman: -16.6, speed: '10 Mbps', price: 120000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-15', name: 'Abdul Wahid', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb8cb24b', ontStatus: 'NEW', pon: '1', redaman: -18.4, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-16', name: 'Selvi Regita', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc088aa0', ontStatus: 'NEW', pon: '1', redaman: -19.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-17', name: 'Rifi', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcbb50685', ontStatus: 'NEW', pon: '1', redaman: -16.3, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-18', name: 'Subuh', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc10ed46', ontStatus: 'NEW', pon: '2', redaman: -19.9, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-19', name: 'Arif', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb6ef6c9', ontStatus: 'NEW', pon: '2', redaman: -20.7, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-20', name: 'Giyono', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb597668', ontStatus: 'NEW', pon: '2', redaman: -27.7, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-21', name: 'Rohman', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc10df07', ontStatus: 'NEW', pon: '2', redaman: -20.1, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-22', name: 'Imam Abu', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc146919', ontStatus: 'NEW', pon: '2', redaman: -18.7, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-23', name: 'Nasi Padang', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc68e150', ontStatus: 'NEW', pon: '2', redaman: -12.4, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-24', name: 'Syaiful Annas', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb82c403', ontStatus: 'NEW', pon: '2', redaman: -26.4, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-25', name: 'Riyan', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb46987d', ontStatus: 'NEW', pon: '2', redaman: -12.2, speed: '10 Mbps', price: 120000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-26', name: 'Yan', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc351158', ontStatus: 'NEW', pon: '2', redaman: -27.1, speed: '20 Mbps', price: 150000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-27', name: 'Yahya Mber', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc25ed24', ontStatus: 'NEW', pon: '2', redaman: -21.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-28', name: 'Aris', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGca83561d', ontStatus: 'NEW', pon: '2', redaman: -17.9, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-29', name: 'Irfan Panjul', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGca86abd9', ontStatus: 'NEW', pon: '2', redaman: -23.0, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-30', name: 'Zuhri Rentenir', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGca7af83b', ontStatus: 'NEW', pon: '2', redaman: -23.6, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-31', name: 'Seblak Cikmay', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGCA813047', ontStatus: 'NEW', pon: '2', redaman: -9.2, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-32', name: 'Eva Rumah', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGCB97DAB2', ontStatus: 'NEW', pon: '1', redaman: -16.1, speed: '6 Mbps', price: 80000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-33', name: 'Shodiqin', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGCAC44152', ontStatus: 'NEW', pon: '1', redaman: -18.5, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-34', name: 'Soka', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGCB9A7DF3', ontStatus: 'NEW', pon: '2', redaman: -16.4, speed: '10 Mbps', price: 120000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-35', name: 'Yasin', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGCB96DC31', ontStatus: 'NEW', pon: '1', redaman: -12.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-36', name: 'Kholik', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcb6a2a53', ontStatus: 'NEW', pon: '2', redaman: -18.7, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-37', name: 'Yuni', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc00073d', ontStatus: 'NEW', pon: '2', redaman: -15.9, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-38', name: 'Ismail', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZTEGcc11aa36', ontStatus: 'NEW', pon: '2', redaman: -27.1, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-39', name: 'Sakinah Madura', phone: '', address: '', modemType: 'XPON ZTE F663NV3A', sn: 'ZICG00b54d77', ontStatus: 'NEW', pon: '2', redaman: -17.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-40', name: 'Salim', phone: '', address: '', modemType: 'XPON ZTE F663NV9', sn: 'ZTEGcde60177', ontStatus: 'NEW', pon: '1', redaman: -21.8, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-41', name: 'Yudistira', phone: '', address: '', modemType: 'XPON ZTE F663NV9', sn: 'ZTEGcda472ae', ontStatus: 'NEW', pon: '1', redaman: -15.1, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-42', name: 'Desi', phone: '', address: '', modemType: 'XPON ZTE F663NV9', sn: 'ZTEGcd04c986', ontStatus: 'NEW', pon: '2', redaman: -15.4, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-43', name: 'Sari', phone: '', address: '', modemType: 'XPON ZTE F663NV9', sn: 'ZTEGcd146ca1', ontStatus: 'NEW', pon: '2', redaman: -18.1, speed: '10 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-44', name: 'Agung', phone: '', address: '', modemType: 'XPON GGCLink G699', sn: 'GGCLcb656b34', ontStatus: 'GANTI', pon: '2', redaman: -7.3, speed: '8 Mbps', price: 100000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-45', name: "Mas'ud", phone: '', address: '', modemType: 'XPON GGCLink G699', sn: 'GGCL298e3ca6', ontStatus: 'GANTI', pon: '2', redaman: -10.9, speed: '6 Mbps', price: 50000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-46', name: 'Ihsan', phone: '', address: '', modemType: 'XPON GGCLink G699', sn: 'GGCL297a3e54', ontStatus: 'SECOND', pon: '2', redaman: -18.9, speed: '7 Mbps', price: 80000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-47', name: 'Dafa', phone: '', address: '', modemType: 'XPON GGCLink G699', sn: 'GGCL2974397b', ontStatus: 'SECOND', pon: '2', redaman: -17.7, speed: '7 Mbps', price: 80000, status: 'AKTIF', installedDate: '2026-01-15' },
+  { id: 'c-48', name: 'Rafiqi', phone: '', address: '', modemType: 'XPON GGCLink G699', sn: 'GGCLc913bb68', ontStatus: 'SECOND', pon: '2', redaman: -18.6, speed: '10 Mbps', price: 120000, status: 'AKTIF', installedDate: '2026-01-15' }
 ];
 
 const INITIAL_EXPENSES = [
@@ -745,66 +718,55 @@ function loadData() {
       state.bills = [];
     }
   }
+
+  // One-time automatic import of the 48 real HM NET customers (from data_pelanggan.xlsx)
+  if (!localStorage.getItem('hmnet_real_48_customers_v10')) {
+    const dummyPhones = new Set(['081234567891', '085798765432', '082155443322', '081399887766', '089876543210']);
+    const prevCustomers = Array.isArray(state.customers) ? state.customers : [];
+
+    state.customers = INITIAL_CUSTOMERS.map(realCust => {
+      const match = prevCustomers.find(
+        p => (p.sn && p.sn.toLowerCase() === realCust.sn.toLowerCase()) ||
+             (p.name && p.name.toLowerCase() === realCust.name.toLowerCase())
+      );
+      const keepPhone = match && match.phone && !dummyPhones.has(match.phone) ? match.phone : realCust.phone;
+      const keepAddr = match && match.address && !['Jl. Utama RT 01 RW 01', 'Gang Mawar No. 12'].includes(match.address) ? match.address : realCust.address;
+      return {
+        ...realCust,
+        phone: keepPhone || '',
+        address: keepAddr || ''
+      };
+    });
+    saveCustomers();
+
+    // Refresh modem types list so XPON ZTE F663NV9 & XPON GGCLink G699 are included
+    localStorage.removeItem(STORAGE_KEYS.MODEM_TYPES);
+    getModemTypesList();
+
+    // Generate clean bills for all 48 real customers
+    state.bills = generateSampleBills(state.customers);
+    saveBills();
+
+    localStorage.setItem('hmnet_real_48_customers_v10', '1');
+  }
 }
 
 function generateSampleBills(customers) {
   const bills = [];
   customers.forEach(c => {
-    // Okt 2026: all paid
+    const isFree = Number(c.price) === 0;
     bills.push({
-      id: `bill-${c.id}-2026-10`,
+      id: `bill-${c.id}-2026-11`,
       customerId: c.id,
       year: 2026,
-      month: 10,
+      month: 11,
       tariff: c.price,
-      amountPaid: c.price,
-      status: 'LUNAS',
-      paymentDate: '2026-10-05',
-      paymentMethod: 'Cash / Tunai',
-      notes: 'Lunas tepat waktu'
+      amountPaid: 0,
+      status: isFree ? 'LUNAS' : 'BELUM',
+      paymentDate: isFree ? '2026-11-01' : '',
+      paymentMethod: isFree ? 'Gratis / Free' : '',
+      notes: isFree ? 'Langganan 1 Mbps (-)' : ''
     });
-
-    // Nov 2026: mixed status
-    if (c.id === 'c-1') {
-      bills.push({
-        id: `bill-${c.id}-2026-11`,
-        customerId: c.id,
-        year: 2026,
-        month: 11,
-        tariff: c.price,
-        amountPaid: c.price,
-        status: 'LUNAS',
-        paymentDate: '2026-11-03',
-        paymentMethod: 'Transfer BCA',
-        notes: '- Desember Lunas'
-      });
-    } else if (c.id === 'c-2') {
-      bills.push({
-        id: `bill-${c.id}-2026-11`,
-        customerId: c.id,
-        year: 2026,
-        month: 11,
-        tariff: c.price,
-        amountPaid: 50000,
-        status: 'SEBAGIAN',
-        paymentDate: '2026-11-02',
-        paymentMethod: 'Cash / Tunai',
-        notes: 'Bayar Sebagian (Sisa 50rb)'
-      });
-    } else {
-      bills.push({
-        id: `bill-${c.id}-2026-11`,
-        customerId: c.id,
-        year: 2026,
-        month: 11,
-        tariff: c.price,
-        amountPaid: 0,
-        status: 'BELUM',
-        paymentDate: '',
-        paymentMethod: '',
-        notes: ''
-      });
-    }
   });
   return bills;
 }
