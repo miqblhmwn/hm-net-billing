@@ -1531,9 +1531,6 @@ function renderGridMatrix() {
     cellsHtml += `
       <td class="py-2 px-3 text-center">
         <div class="flex items-center justify-center space-x-1">
-          <button onclick="openCustomerPayPortal('${c.id}', ${currentYear}, ${state.selectedMonth})" title="Buka Halaman Link Bayar Pelanggan" class="p-1 rounded text-brand-600 hover:bg-brand-50 transition">
-            <i data-lucide="credit-card" class="w-4 h-4"></i>
-          </button>
           <button onclick="openModalHistory('${c.id}')" title="Histori Pembayaran" class="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition">
             <i data-lucide="history" class="w-4 h-4"></i>
           </button>
@@ -1600,10 +1597,6 @@ function renderGridSingleMonth() {
         <div class="flex items-center justify-center space-x-1.5">
           <button onclick="handleGridCellClick('${c.id}', ${currentYear}, ${currentMonth})" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition">
             Update Bayar
-          </button>
-          <button onclick="openCustomerPayPortal('${c.id}', ${currentYear}, ${currentMonth})" title="Buka Halaman Link Bayar Pelanggan" class="px-2 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 font-bold rounded-lg text-[11px] transition flex items-center space-x-1">
-            <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
-            <span>Link Bayar</span>
           </button>
           <button onclick="openModalWhatsApp('${c.id}', ${currentYear}, ${currentMonth})" title="Kirim Tagihan WA" class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
             <i data-lucide="message-circle" class="w-4 h-4"></i>
@@ -2883,13 +2876,10 @@ Berikut adalah rincian tagihan internet Wi-Fi Anda untuk periode *{periode}*:
 • Status: *{status}*
 • Jatuh Tempo: {jatuh_tempo}
 
-💳 *OPSI 1 — BAYAR ONLINE OTOMATIS (KLIK LINK):*
-Cukup klik link biru di bawah ini untuk memilih metode bayar (QRIS / Mandiri / BRI / DANA / LinkAja) & pembayaran otomatis tercatat di sistem:
-{link_bayar}
-
-💵 *OPSI 2 — PEMBAYARAN MANUAL / TUNAI:*
+💳 *Informasi Pembayaran Resmi HM NET:*
 {rekening}
 
+Konfirmasi Bukti Pembayaran (WA Admin): *085691693286*
 Terima kasih atas kerjasamanya! 🙏
 *HM NET - Akses Internet Rumahan*`,
 
@@ -2900,14 +2890,11 @@ Penting! Yth. Kak *{nama}*,
 
 Tagihan internet Wi-Fi Anda periode *{periode}* sebesar *{tagihan}* telah melewati batas jatuh tempo ({jatuh_tempo}).
 
-Untuk menjaga kelancaran koneksi internet Anda dan menghindari isolir (pemutusan sementara), mohon untuk segera menyelesaikan pembayaran tagihan Anda:
+Untuk menjaga kelancaran koneksi internet Anda dan menghindari isolir (pemutusan sementara), mohon untuk segera menyelesaikan pembayaran tagihan Anda melalui:
 
-💳 *Klik Link Pembayaran Otomatis:*
-{link_bayar}
-
-Atau melalui pembayaran manual:
 {rekening}
 
+Konfirmasi Bukti Pembayaran (WA Admin): *085691693286*
 *Abaikan pesan ini bila sudah melakukan pembayaran*. Terima kasih atas perhatiannya! 🙏
 *HM NET - Akses Internet Rumahan*`,
 
@@ -2977,8 +2964,8 @@ function getWaTemplates() {
       ...DEFAULT_WA_TEMPLATES,
       ...parsed
     };
-    // Auto-upgrade legacy template if it doesn't have {link_bayar} on its own line or still has old dummy bank accounts
-    if (!localStorage.getItem('hmnet_wa_tpl_rekening_v7')) {
+    // Auto-upgrade template to remove link pembayaran and keep Mandiri/BRI/DANA/LinkAja
+    if (!localStorage.getItem('hmnet_wa_tpl_nolink_v8')) {
       merged.bankBca = DEFAULT_WA_TEMPLATES.bankBca;
       merged.bankBri = DEFAULT_WA_TEMPLATES.bankBri;
       merged.ewalletInfo = DEFAULT_WA_TEMPLATES.ewalletInfo;
@@ -2986,7 +2973,7 @@ function getWaTemplates() {
       merged.paymentInfo = DEFAULT_WA_TEMPLATES.paymentInfo;
       merged.tagihan = DEFAULT_WA_TEMPLATES.tagihan;
       merged.peringatan = DEFAULT_WA_TEMPLATES.peringatan;
-      localStorage.setItem('hmnet_wa_tpl_rekening_v7', '1');
+      localStorage.setItem('hmnet_wa_tpl_nolink_v8', '1');
       saveWaTemplates(merged);
     }
     return merged;
