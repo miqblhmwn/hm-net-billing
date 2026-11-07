@@ -36,9 +36,48 @@ const DEFAULT_MODEM_TYPES = [
 const DEFAULT_ADMIN = null;
 
 // Default dummy account (admin/admin123) dimatikan permanen.
-// Hanya akun Induk & Akun Anak yang terdaftar resmi yang diizinkan login.
-const DEFAULT_USERS = [];
-const HMNET_CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1b5ed4bed5bad';
+// Akun resmi HM NET (himanet) disertakan secara bawaan agar langsung bisa login di semua HP/perangkat.
+const DEFAULT_USERS = [
+  {
+    id: 'u-admin-himanet',
+    username: 'himanet',
+    password: '060602',
+    name: 'Admin Utama (HM NET)',
+    role: 'SUPER_ADMIN',
+    roleLabel: 'Admin Utama (Induk)',
+    isParent: true,
+    status: 'AKTIF',
+    createdAt: '2026-01-01',
+    permissions: {
+      dashboard: true,
+      pelanggan_view: true,
+      pelanggan_edit: true,
+      pelanggan_delete: true,
+      tagihan_view: true,
+      tagihan_edit: true,
+      tagihan_wa: true,
+      keuangan_view: true,
+      keuangan_edit: true,
+      backup_data: true,
+      manage_users: true
+    }
+  }
+];
+const HMNET_CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1b6050a475c1e';
+
+const PERM_KEYS = [
+  'dashboard',
+  'pelanggan_view',
+  'pelanggan_edit',
+  'pelanggan_delete',
+  'tagihan_view',
+  'tagihan_edit',
+  'tagihan_wa',
+  'keuangan_view',
+  'keuangan_edit',
+  'backup_data',
+  'manage_users'
+];
 
 function isBlockedDefaultCredential(username, password, userId = '') {
   const u = String(username || '').trim().toLowerCase();
@@ -227,6 +266,20 @@ function getUsersList() {
     modified = true;
   }
 
+  // Pastikan akun resmi bawaan (DEFAULT_USERS: himanet) selalu tersedia di HP/perangkat baru
+  if (Array.isArray(DEFAULT_USERS) && DEFAULT_USERS.length > 0) {
+    DEFAULT_USERS.forEach(defUser => {
+      const exists = users.some(
+        u => u.id === defUser.id || String(u.username || '').toLowerCase() === defUser.username.toLowerCase()
+      );
+      const hasAnyParent = users.some(u => u.isParent);
+      if (!exists && (!defUser.isParent || !hasAnyParent)) {
+        users.unshift({ ...defUser, permissions: { ...defUser.permissions } });
+        modified = true;
+      }
+    });
+  }
+
   // Pastikan jika ada akun terdaftar, minimal akun Induk pertama memiliki akses Admin Utama (manage_users)
   // tanpa mengubah hak akses Akun Anak lainnya!
   if (users.length > 0) {
@@ -280,9 +333,62 @@ function saveUsersList(users, syncCloud = true) {
 }
 
 // =========================================================
-// CLOUD SYNC ANTAR PERANGKAT / HP LAIN (UNTUK AKUN ANAK & DATA)
+// CLOUD SYNC ANTAR PERANGKAT / HP LAIN (UNTUK AKUN INDUK & AKUN ANAK)
 // =========================================================
 let cloudSyncTimer = null;
+
+function encodeUsersCompact(users) {
+  return (users || [])
+    .filter(u => u && u.username && !isBlockedDefaultCredential(u.username, u.password, u.id))
+    .map(u => {
+      let mask = 0;
+      PERM_KEYS.forEach((k, bit) => {
+        if (!u.permissions || u.permissions[k]) mask |= (1 << bit);
+      });
+      const clean = s => String(s || '').replace(/[\t\r\n]/g, ' ').trim();
+      return [
+        clean(u.username),
+        String(u.password || '').replace(/[\t\r\n]/g, ''),
+        clean(u.name || u.username).slice(0, 22),
+        clean(u.roleLabel || 'Staf').slice(0, 20),
+        u.isParent ? '1' : '0',
+        u.status === 'NONAKTIF' ? '0' : '1',
+        mask.toString(16)
+      ].join('\t');
+    })
+    .join('\n');
+}
+
+function decodeUsersCompact(compactStr) {
+  if (!compactStr || typeof compactStr !== 'string') return [];
+  return compactStr
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [username, password, name, roleLabel, isParentStr, statusStr, maskHex] = line.split('\t');
+      if (!username || !password) return null;
+      const mask = parseInt(maskHex || '7ff', 16);
+      const permissions = {};
+      PERM_KEYS.forEach((k, bit) => {
+        permissions[k] = Boolean(mask & (1 << bit));
+      });
+      const isParent = isParentStr === '1';
+      return {
+        id: isParent ? 'u-admin-himanet' : `u-sync-${username.toLowerCase()}`,
+        username: username.trim(),
+        password: password,
+        name: name || username,
+        role: isParent || permissions.manage_users ? 'SUPER_ADMIN' : 'CHILD_USER',
+        roleLabel: roleLabel || (isParent ? 'Admin Utama (Induk)' : 'Akun Anak / Staf'),
+        isParent: isParent,
+        status: statusStr === '0' ? 'NONAKTIF' : 'AKTIF',
+        createdAt: '2026-01-01',
+        permissions
+      };
+    })
+    .filter(Boolean);
+}
 
 function pushCloudSync(immediate = false) {
   const doPush = async () => {
@@ -290,15 +396,9 @@ function pushCloudSync(immediate = false) {
       const users = getUsersList();
       if (!users || users.length === 0) return;
       const payload = {
-        name: 'hmnet-cloud-db',
+        name: 'hmnet-users-v15',
         data: {
-          updatedAt: Date.now(),
-          users: users,
-          customers: state.customers && state.customers.length > 0 ? state.customers : undefined,
-          bills: state.bills && state.bills.length > 0 ? state.bills : undefined,
-          expenses: state.expenses && state.expenses.length > 0 ? state.expenses : undefined,
-          modemTypes: getModemTypesList(),
-          redamanConfig: getRedamanConfig()
+          c: encodeUsersCompact(users)
         }
       };
       await fetch(HMNET_CLOUD_SYNC_URL, {
@@ -315,7 +415,7 @@ function pushCloudSync(immediate = false) {
     return doPush();
   }
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
-  cloudSyncTimer = setTimeout(doPush, 600);
+  cloudSyncTimer = setTimeout(doPush, 400);
 }
 
 async function pullCloudSync() {
@@ -326,96 +426,47 @@ async function pullCloudSync() {
     const cloudData = obj && obj.data ? obj.data : null;
     if (!cloudData) return false;
 
-    let updatedAny = false;
+    const cloudUsers = cloudData.c
+      ? decodeUsersCompact(cloudData.c)
+      : (Array.isArray(cloudData.users) ? cloudData.users : []);
 
-    // 1. Merge Akun Terdaftar (Induk & Akun Anak) dari Cloud ke Browser ini
-    if (Array.isArray(cloudData.users) && cloudData.users.length > 0) {
-      const localUsers = getUsersList();
-      const mergedUsers = [...localUsers];
-      let usersChanged = false;
+    const localUsers = getUsersList();
+    const mergedUsers = [...localUsers];
+    let usersChanged = false;
 
-      cloudData.users.forEach(cu => {
-        if (!cu || !cu.username || isBlockedDefaultCredential(cu.username, cu.password, cu.id)) return;
-        const idx = mergedUsers.findIndex(
-          lu => lu.id === cu.id || lu.username.toLowerCase() === cu.username.toLowerCase()
-        );
-        if (idx === -1) {
-          mergedUsers.push(cu);
-          usersChanged = true;
-        } else {
-          // Update password/status/permissions dari cloud jika ada perubahan
-          if (
-            mergedUsers[idx].password !== cu.password ||
-            mergedUsers[idx].status !== cu.status ||
-            JSON.stringify(mergedUsers[idx].permissions) !== JSON.stringify(cu.permissions)
-          ) {
-            mergedUsers[idx] = { ...mergedUsers[idx], ...cu };
-            usersChanged = true;
-          }
-        }
-      });
-
-      if (usersChanged) {
-        saveUsersList(mergedUsers, false);
-        updatedAny = true;
-      } else if (localUsers.length > cloudData.users.length) {
-        // Jika browser lokal punya lebih banyak akun anak baru dibanding cloud, push ke cloud
-        pushCloudSync();
-      }
-    } else {
-      // Cloud belum punya daftar akun tapi browser lokal punya -> langsung push ke cloud!
-      const localUsers = getUsersList();
-      if (localUsers.length > 0) {
-        pushCloudSync(true);
-      }
-    }
-
-    // 2. Merge Pelanggan, Tagihan, Pengeluaran, Modem, & Redaman tanpa menghapus data lokal
-    if (Array.isArray(cloudData.customers) && cloudData.customers.length > 0) {
-      const localCustRaw = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-      if (!localCustRaw) {
-        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(cloudData.customers));
-        state.customers = cloudData.customers;
-        updatedAny = true;
+    cloudUsers.forEach(cu => {
+      if (!cu || !cu.username || isBlockedDefaultCredential(cu.username, cu.password, cu.id)) return;
+      const idx = mergedUsers.findIndex(
+        lu => lu.id === cu.id || lu.username.toLowerCase() === cu.username.toLowerCase()
+      );
+      if (idx === -1) {
+        mergedUsers.push(cu);
+        usersChanged = true;
       } else {
-        try {
-          const localCusts = JSON.parse(localCustRaw);
-          if (Array.isArray(localCusts)) {
-            let custAdded = false;
-            cloudData.customers.forEach(cc => {
-              const ex = localCusts.find(lc => lc.id === cc.id || (lc.sn && cc.sn && lc.sn.toLowerCase() === cc.sn.toLowerCase()));
-              if (!ex) {
-                localCusts.push(cc);
-                custAdded = true;
-              } else if (!ex.phone && cc.phone) {
-                ex.phone = cc.phone;
-                custAdded = true;
-              }
-            });
-            if (custAdded) {
-              localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(localCusts));
-              state.customers = localCusts;
-              updatedAny = true;
-            }
-          }
-        } catch (e) {}
+        if (
+          mergedUsers[idx].password !== cu.password ||
+          mergedUsers[idx].status !== cu.status ||
+          JSON.stringify(mergedUsers[idx].permissions) !== JSON.stringify(cu.permissions)
+        ) {
+          mergedUsers[idx] = { ...mergedUsers[idx], ...cu, id: mergedUsers[idx].id };
+          usersChanged = true;
+        }
       }
+    });
+
+    if (usersChanged) {
+      saveUsersList(mergedUsers, false);
     }
 
-    if (Array.isArray(cloudData.bills) && cloudData.bills.length > 0) {
-      const localBillsRaw = localStorage.getItem(STORAGE_KEYS.BILLS);
-      if (!localBillsRaw) {
-        localStorage.setItem(STORAGE_KEYS.BILLS, JSON.stringify(cloudData.bills));
-        state.bills = cloudData.bills;
-        updatedAny = true;
-      }
+    // Jika di perangkat lokal ini ada Akun Anak yang belum tercatat di Cloud, dorong balik ke Cloud!
+    const hasUnsyncedLocal = mergedUsers.some(
+      lu => !cloudUsers.some(cu => cu.username.toLowerCase() === lu.username.toLowerCase() && cu.password === lu.password)
+    );
+    if (hasUnsyncedLocal) {
+      pushCloudSync(true);
     }
 
-    if (cloudData.redamanConfig && !localStorage.getItem(STORAGE_KEYS.REDAMAN_CONFIG)) {
-      saveRedamanConfig(cloudData.redamanConfig);
-    }
-
-    return updatedAny;
+    return usersChanged;
   } catch (e) {
     return false;
   }
@@ -1035,17 +1086,14 @@ function generateSampleBills(customers) {
 
 function saveCustomers() {
   localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(state.customers));
-  pushCloudSync();
 }
 
 function saveBills() {
   localStorage.setItem(STORAGE_KEYS.BILLS, JSON.stringify(state.bills));
-  pushCloudSync();
 }
 
 function saveExpenses() {
   localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(state.expenses));
-  pushCloudSync();
 }
 
 // ==========================================
