@@ -962,10 +962,16 @@
               <p class="text-xs text-slate-500 mt-0.5">Buat dan atur kewenangan hak akses login untuk akun teknisi, kasir, atau staf operasional HM NET.</p>
             </div>
           </div>
-          <button onclick="openModalUserForm()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2 shrink-0">
-            <i data-lucide="user-plus" class="w-4 h-4"></i>
-            <span>+ Buat Akun Anak Baru</span>
-          </button>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button onclick="syncUsersToCloudManual()" class="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Sinkronkan seluruh Akun Induk & Akun Anak ke Cloud agar bisa login dari HP/perangkat lain">
+              <i data-lucide="cloud-upload" class="w-4 h-4 text-emerald-600"></i>
+              <span>Sinkronkan ke HP Lain</span>
+            </button>
+            <button onclick="openModalUserForm()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-2">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              <span>+ Buat Akun Anak Baru</span>
+            </button>
+          </div>
         </div>
 
         <!-- Metric Stat Cards for Users -->
@@ -2554,7 +2560,7 @@
   </div>
 
   <!-- External Application Logic Script -->
-  <script src="app.js?v=20261107_v13"></script>
+  <script src="app.js?v=20261107_v14"></script>
 
   <script>
     // Initialize Lucide icons on start
