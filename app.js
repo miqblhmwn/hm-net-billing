@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   AUTH_SESSION: 'hmnet_auth_session_v1',
   ADMIN_ACCOUNT: 'hmnet_admin_account_v1',
   USERS: 'hmnet_users_v2',
+  USERS_UPDATED_AT: 'hmnet_users_updated_at_v1',
   WA_TEMPLATES: 'hmnet_wa_templates_v1',
   MODEM_TYPES: 'hmnet_modem_types_v1',
   REDAMAN_CONFIG: 'hmnet_redaman_config_v1'
@@ -42,7 +43,7 @@ const DEFAULT_USERS = [
     id: 'u-admin-himanet',
     username: 'himanet',
     password: '060602',
-    name: 'Admin Utama (HM NET)',
+    name: 'Bos HMNET',
     role: 'SUPER_ADMIN',
     roleLabel: 'Admin Utama (Induk)',
     isParent: true,
@@ -63,7 +64,8 @@ const DEFAULT_USERS = [
     }
   }
 ];
-const HMNET_CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1b6050a475c1e';
+const HMNET_CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1b61d3af25c56';
+const HMNET_NTFY_TOPIC = 'hmnet_users_sync_v16_998877';
 
 const PERM_KEYS = [
   'dashboard',
@@ -314,8 +316,32 @@ function getUsersList() {
   return users;
 }
 
-function saveUsersList(users, syncCloud = true) {
+function getUsersUpdatedAt() {
+  const val = Number(localStorage.getItem(STORAGE_KEYS.USERS_UPDATED_AT) || 0);
+  if (val > 0) return val;
+  try {
+    const rawUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    const rawSession = JSON.parse(localStorage.getItem(STORAGE_KEYS.AUTH_SESSION) || 'null');
+    if (
+      (Array.isArray(rawUsers) && rawUsers.length > 1) ||
+      (rawSession && rawSession.permissions && rawSession.permissions.manage_users)
+    ) {
+      const now = Date.now();
+      localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(now));
+      return now;
+    }
+  } catch (e) {}
+  return 0;
+}
+
+function saveUsersList(users, syncCloud = true, customUpdatedAt = null) {
   localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  if (customUpdatedAt !== null) {
+    localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(customUpdatedAt));
+  } else if (syncCloud) {
+    localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(Date.now()));
+  }
+
   const rootAdmin = users.find(u => u.isParent) || users[0];
   if (rootAdmin && !isBlockedDefaultCredential(rootAdmin.username, rootAdmin.password, rootAdmin.id)) {
     saveAdminAccount({
@@ -328,7 +354,7 @@ function saveUsersList(users, syncCloud = true) {
     localStorage.removeItem(STORAGE_KEYS.ADMIN_ACCOUNT);
   }
   if (syncCloud) {
-    pushCloudSync();
+    pushCloudSync(true);
   }
 }
 
@@ -347,13 +373,14 @@ function encodeUsersCompact(users) {
       });
       const clean = s => String(s || '').replace(/[\t\r\n]/g, ' ').trim();
       return [
-        clean(u.username),
-        String(u.password || '').replace(/[\t\r\n]/g, ''),
+        clean(u.username).slice(0, 20),
+        String(u.password || '').replace(/[\t\r\n]/g, '').slice(0, 24),
         clean(u.name || u.username).slice(0, 22),
         clean(u.roleLabel || 'Staf').slice(0, 20),
         u.isParent ? '1' : '0',
         u.status === 'NONAKTIF' ? '0' : '1',
-        mask.toString(16)
+        mask.toString(16),
+        clean(u.createdAt || '2026-01-01').slice(0, 10)
       ].join('\t');
     })
     .join('\n');
@@ -366,7 +393,7 @@ function decodeUsersCompact(compactStr) {
     .map(line => line.trim())
     .filter(Boolean)
     .map(line => {
-      const [username, password, name, roleLabel, isParentStr, statusStr, maskHex] = line.split('\t');
+      const [username, password, name, roleLabel, isParentStr, statusStr, maskHex, createdAt] = line.split('\t');
       if (!username || !password) return null;
       const mask = parseInt(maskHex || '7ff', 16);
       const permissions = {};
@@ -374,40 +401,70 @@ function decodeUsersCompact(compactStr) {
         permissions[k] = Boolean(mask & (1 << bit));
       });
       const isParent = isParentStr === '1';
+      let role = 'CUSTOM';
+      if (isParent || (permissions.manage_users && permissions.keuangan_view)) {
+        role = 'SUPER_ADMIN';
+      } else if (permissions.pelanggan_view && permissions.pelanggan_edit && !permissions.keuangan_view) {
+        role = 'TEKNISI';
+      } else if (permissions.tagihan_view && permissions.tagihan_edit && !permissions.keuangan_view) {
+        role = 'KASIR';
+      }
       return {
-        id: isParent ? 'u-admin-himanet' : `u-sync-${username.toLowerCase()}`,
+        id: isParent ? 'u-admin-himanet' : `u-sync-${username.trim().toLowerCase()}`,
         username: username.trim(),
         password: password,
         name: name || username,
-        role: isParent || permissions.manage_users ? 'SUPER_ADMIN' : 'CHILD_USER',
+        role: role,
         roleLabel: roleLabel || (isParent ? 'Admin Utama (Induk)' : 'Akun Anak / Staf'),
         isParent: isParent,
         status: statusStr === '0' ? 'NONAKTIF' : 'AKTIF',
-        createdAt: '2026-01-01',
+        createdAt: createdAt || '2026-01-01',
         permissions
       };
     })
     .filter(Boolean);
 }
 
+function fetchWithTimeout(url, options = {}, timeoutMs = 4500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 function pushCloudSync(immediate = false) {
   const doPush = async () => {
     try {
       const users = getUsersList();
-      if (!users || users.length === 0) return;
-      const payload = {
-        name: 'hmnet-users-v15',
-        data: {
-          c: encodeUsersCompact(users)
-        }
-      };
-      await fetch(HMNET_CLOUD_SYNC_URL, {
+      if (!users || users.length === 0) return false;
+      let updatedAt = getUsersUpdatedAt();
+      if (!updatedAt) {
+        updatedAt = Date.now();
+        localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(updatedAt));
+      }
+      const compactStr = encodeUsersCompact(users);
+
+      const ntfyPromise = fetchWithTimeout('https://ntfy.sh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: HMNET_NTFY_TOPIC,
+          message: JSON.stringify({ t: updatedAt, c: compactStr })
+        })
+      }, 4500);
+
+      const restPromise = fetchWithTimeout(HMNET_CLOUD_SYNC_URL, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        body: JSON.stringify({
+          name: 'hmnet-users-v16',
+          data: { t: updatedAt, c: compactStr }
+        })
+      }, 4500);
+
+      const results = await Promise.allSettled([ntfyPromise, restPromise]);
+      return results.some(r => r.status === 'fulfilled' && r.value && r.value.ok);
     } catch (e) {
-      // Abaikan jika sedang offline
+      return false;
     }
   };
 
@@ -415,58 +472,101 @@ function pushCloudSync(immediate = false) {
     return doPush();
   }
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
-  cloudSyncTimer = setTimeout(doPush, 400);
+  cloudSyncTimer = setTimeout(doPush, 300);
 }
 
 async function pullCloudSync() {
   try {
-    const res = await fetch(HMNET_CLOUD_SYNC_URL, { method: 'GET', cache: 'no-store' });
-    if (!res.ok) return false;
-    const obj = await res.json();
-    const cloudData = obj && obj.data ? obj.data : null;
-    if (!cloudData) return false;
+    const candidates = [];
 
-    const cloudUsers = cloudData.c
-      ? decodeUsersCompact(cloudData.c)
-      : (Array.isArray(cloudData.users) ? cloudData.users : []);
+    const ntfyFetch = fetchWithTimeout(
+      `https://ntfy.sh/${HMNET_NTFY_TOPIC}/json?poll=1&since=all`,
+      { method: 'GET', cache: 'no-store' },
+      4500
+    ).then(async res => {
+      if (!res.ok) return;
+      const text = await res.text();
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      for (let i = lines.length - 1; i >= 0; i--) {
+        try {
+          const evt = JSON.parse(lines[i]);
+          if (evt && evt.message) {
+            const parsed = JSON.parse(evt.message);
+            if (parsed && parsed.c) {
+              const decoded = decodeUsersCompact(parsed.c);
+              if (decoded.length > 0) {
+                candidates.push({ t: Number(parsed.t || 0), users: decoded });
+                break;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+    });
 
-    const localUsers = getUsersList();
-    const mergedUsers = [...localUsers];
-    let usersChanged = false;
-
-    cloudUsers.forEach(cu => {
-      if (!cu || !cu.username || isBlockedDefaultCredential(cu.username, cu.password, cu.id)) return;
-      const idx = mergedUsers.findIndex(
-        lu => lu.id === cu.id || lu.username.toLowerCase() === cu.username.toLowerCase()
-      );
-      if (idx === -1) {
-        mergedUsers.push(cu);
-        usersChanged = true;
-      } else {
-        if (
-          mergedUsers[idx].password !== cu.password ||
-          mergedUsers[idx].status !== cu.status ||
-          JSON.stringify(mergedUsers[idx].permissions) !== JSON.stringify(cu.permissions)
-        ) {
-          mergedUsers[idx] = { ...mergedUsers[idx], ...cu, id: mergedUsers[idx].id };
-          usersChanged = true;
+    const restFetch = fetchWithTimeout(
+      HMNET_CLOUD_SYNC_URL,
+      { method: 'GET', cache: 'no-store' },
+      4500
+    ).then(async res => {
+      if (!res.ok) return;
+      const obj = await res.json();
+      const cloudData = obj && obj.data ? obj.data : null;
+      if (cloudData && cloudData.c) {
+        const decoded = decodeUsersCompact(cloudData.c);
+        if (decoded.length > 0) {
+          candidates.push({ t: Number(cloudData.t || 0), users: decoded });
         }
       }
     });
 
-    if (usersChanged) {
-      saveUsersList(mergedUsers, false);
+    await Promise.allSettled([ntfyFetch, restFetch]);
+
+    const localUsers = getUsersList();
+    const localTime = getUsersUpdatedAt();
+
+    if (candidates.length === 0) {
+      if (localTime > 0 && (localUsers.length > 1 || state.currentUser?.permissions?.manage_users)) {
+        await pushCloudSync(true);
+      }
+      return false;
     }
 
-    // Jika di perangkat lokal ini ada Akun Anak yang belum tercatat di Cloud, dorong balik ke Cloud!
-    const hasUnsyncedLocal = mergedUsers.some(
-      lu => !cloudUsers.some(cu => cu.username.toLowerCase() === lu.username.toLowerCase() && cu.password === lu.password)
-    );
-    if (hasUnsyncedLocal) {
-      pushCloudSync(true);
+    // Pilih snapshot Cloud dengan timestamp terbaru
+    candidates.sort((a, b) => b.t - a.t);
+    const bestCloud = candidates[0];
+    const cloudTime = bestCloud.t;
+    const cloudUsers = bestCloud.users;
+
+    // Jika perangkat ini (misal Laptop Admin) punya data akun yang lebih baru dibanding Cloud -> dorong ke Cloud!
+    if (localTime > cloudTime && (localUsers.length > 1 || state.currentUser?.permissions?.manage_users)) {
+      await pushCloudSync(true);
+      return false;
     }
 
-    return usersChanged;
+    // Jika Cloud lebih baru (atau perangkat ini adalah HP lain yang belum sinkron) -> perbarui daftar akun penuh dari Cloud!
+    if (cloudTime > localTime || (localTime === 0 && cloudUsers.length > 0)) {
+      saveUsersList(cloudUsers, false, cloudTime);
+
+      // Jika pengguna sedang login di perangkat ini, sinkronkan status & hak aksesnya secara langsung
+      if (state.currentUser) {
+        const updatedSelf = cloudUsers.find(
+          u => u.username.toLowerCase() === String(state.currentUser.username || '').toLowerCase() || u.id === state.currentUser.id
+        );
+        if (!updatedSelf || updatedSelf.status !== 'AKTIF') {
+          localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
+          state.currentUser = null;
+          showLoginView();
+        } else {
+          state.currentUser = { ...updatedSelf };
+          localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(state.currentUser));
+          applyUserPermissions(state.currentUser);
+        }
+      }
+      return true;
+    }
+
+    return false;
   } catch (e) {
     return false;
   }
@@ -481,28 +581,15 @@ function handleUrlAccountSync() {
     const jsonStr = decodeURIComponent(escape(atob(akunParam)));
     const payload = JSON.parse(jsonStr);
     const incomingUsers = Array.isArray(payload) ? payload : (payload.users || [payload]);
+    const incomingTime = Number(payload.t || Date.now());
 
-    const localUsers = getUsersList();
-    let changed = false;
-    let targetUsername = payload.targetUsername || '';
+    const cleanUsers = incomingUsers.filter(
+      iu => iu && iu.username && !isBlockedDefaultCredential(iu.username, iu.password, iu.id)
+    );
+    const targetUsername = payload.targetUsername || (cleanUsers[0] ? cleanUsers[0].username : '');
 
-    incomingUsers.forEach(iu => {
-      if (!iu || !iu.username || isBlockedDefaultCredential(iu.username, iu.password, iu.id)) return;
-      const idx = localUsers.findIndex(
-        u => u.id === iu.id || u.username.toLowerCase() === iu.username.toLowerCase()
-      );
-      if (idx === -1) {
-        localUsers.push(iu);
-        changed = true;
-      } else {
-        localUsers[idx] = { ...localUsers[idx], ...iu };
-        changed = true;
-      }
-      if (!targetUsername) targetUsername = iu.username;
-    });
-
-    if (changed) {
-      saveUsersList(localUsers, true);
+    if (cleanUsers.length > 0) {
+      saveUsersList(cleanUsers, true, incomingTime);
     }
 
     // Bersihkan parameter URL agar rapi
@@ -526,10 +613,11 @@ async function shareChildAccountLink(userId) {
   const targetUser = users.find(u => u.id === userId);
   if (!targetUser) return;
 
-  // Pastikan tersinkron ke Cloud juga saat tombol diklik
+  localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(Date.now()));
   await pushCloudSync(true);
 
   const payload = {
+    t: getUsersUpdatedAt(),
     targetUsername: targetUser.username,
     users: users
   };
@@ -546,10 +634,16 @@ async function shareChildAccountLink(userId) {
 }
 
 async function syncUsersToCloudManual() {
-  await pushCloudSync(true);
-  await pullCloudSync();
+  const users = getUsersList();
+  localStorage.setItem(STORAGE_KEYS.USERS_UPDATED_AT, String(Date.now()));
+  const ok = await pushCloudSync(true);
   renderTableUsers();
-  showToast('Seluruh Akun Induk & Akun Anak berhasil disinkronkan ke Cloud (Bisa langsung login di HP lain)!');
+  const usernames = users.map(u => '@' + u.username).join(', ');
+  if (ok) {
+    showToast(`Berhasil! ${users.length} Akun (${usernames}) telah aktif & tersinkron ke semua HP/perangkat!`);
+  } else {
+    showToast(`Data akun (${usernames}) disimpan. Pastikan koneksi internet aktif.`);
+  }
 }
 
 function getAdminAccount() {
@@ -743,22 +837,15 @@ async function handleLogin(e) {
     return;
   }
 
+  // Tarik pembaruan akun terbaru dari Cloud Sync sebelum memverifikasi login,
+  // sehingga akun baru maupun akun yang baru diubah password/username/hak aksesnya langsung sinkron di semua HP!
+  await pullCloudSync();
+
   let users = getUsersList();
   let user = users.find(
     u => u.username.toLowerCase() === usernameInput &&
          (u.password === passwordInput || u.password === passwordInput.trim())
   );
-
-  // Jika belum ditemukan di browser ini (misal orang lain login pakai Akun Anak dari HP/browser lain),
-  // tarik data terbaru dari Cloud Sync secara otomatis lalu cek ulang!
-  if (!user) {
-    await pullCloudSync();
-    users = getUsersList();
-    user = users.find(
-      u => u.username.toLowerCase() === usernameInput &&
-           (u.password === passwordInput || u.password === passwordInput.trim())
-    );
-  }
 
   if (!user) {
     if (errorAlert) {
@@ -5406,12 +5493,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Tangani jika pengguna membuka Link Sinkronisasi Akun (?akun=...) di HP / browser lain
   handleUrlAccountSync();
 
-  // Sinkronisasi otomatis daftar Akun Induk & Akun Anak dengan Cloud agar bisa login dari HP/perangkat lain
+  // Check auth first: if logged in, load app; if not, show login view
+  const isAuthenticated = checkAuthSession();
+  if (isAuthenticated) {
+    initApp();
+  }
+
+  // Sinkronisasi otomatis daftar Akun Induk & Akun Anak dengan Cloud (dua arah berbasis timestamp terbaru)
   pullCloudSync().then((updated) => {
-    // Jika browser ini sudah punya akun terdaftar (Admin Induk / Akun Anak), dorong juga ke Cloud
-    if (getUsersList().length > 0) {
-      pushCloudSync();
-    }
     if (updated && state.currentUser) {
       renderDashboard();
       renderTablePelanggan();
@@ -5421,10 +5510,4 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
-
-  // Check auth first: if logged in, load app; if not, show login view
-  const isAuthenticated = checkAuthSession();
-  if (isAuthenticated) {
-    initApp();
-  }
 });
