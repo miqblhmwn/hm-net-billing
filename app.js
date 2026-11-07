@@ -10,8 +10,21 @@ const STORAGE_KEYS = {
   AUTH_SESSION: 'hmnet_auth_session_v1',
   ADMIN_ACCOUNT: 'hmnet_admin_account_v1',
   USERS: 'hmnet_users_v2',
-  WA_TEMPLATES: 'hmnet_wa_templates_v1'
+  WA_TEMPLATES: 'hmnet_wa_templates_v1',
+  MODEM_TYPES: 'hmnet_modem_types_v1'
 };
+
+const DEFAULT_MODEM_TYPES = [
+  { name: 'GPON Fiberhome HG6145D2', color: 'amber' },
+  { name: 'GPON Fiberhome HG6145F', color: 'amber' },
+  { name: 'GPON ZTE F6600PV9', color: 'green' },
+  { name: 'GPON ZTE F670L', color: 'green' },
+  { name: 'XPON ZTE F663NV3A', color: 'fuchsia' },
+  { name: 'GPON ZTE F609', color: 'green' },
+  { name: 'GPON Huawei HG8245H5', color: 'blue' },
+  { name: 'XPON GGCLink', color: 'cyan' },
+  { name: 'EPON / XPON HIOSO', color: 'slate' }
+];
 
 const DEFAULT_ADMIN = {
   username: 'admin',
@@ -107,7 +120,7 @@ const INITIAL_CUSTOMERS = [
     name: 'Falah',
     phone: '081234567891',
     address: 'Jl. Utama RT 01 RW 01',
-    modemType: 'XPON ZTE',
+    modemType: 'GPON ZTE F6600PV9',
     sn: 'ZTEGd3be73c7',
     ontStatus: 'NEW',
     pon: '1',
@@ -122,7 +135,7 @@ const INITIAL_CUSTOMERS = [
     name: 'Agung',
     phone: '085798765432',
     address: 'Gang Mawar No. 12',
-    modemType: 'GGCLink',
+    modemType: 'GPON ZTE F670L',
     sn: 'GGCLcb556b34',
     ontStatus: 'SECOND',
     pon: '2',
@@ -137,7 +150,7 @@ const INITIAL_CUSTOMERS = [
     name: 'Pak Rudi',
     phone: '082155443322',
     address: 'Ujung Jalur PON 1',
-    modemType: 'Fiberhome',
+    modemType: 'GPON Fiberhome HG6145D2',
     sn: 'FHBB883921AA',
     ontStatus: 'GANTI',
     pon: '1',
@@ -152,7 +165,7 @@ const INITIAL_CUSTOMERS = [
     name: 'Bu Siti Khodijah',
     phone: '081399887766',
     address: 'Kompleks HM Net Blok B',
-    modemType: 'GPON ZTE',
+    modemType: 'GPON Fiberhome HG6145F',
     sn: 'ZTEG778844FF',
     ontStatus: 'NEW',
     pon: '2',
@@ -167,7 +180,7 @@ const INITIAL_CUSTOMERS = [
     name: 'Mas Dedi Warnet',
     phone: '089876543210',
     address: 'Dekat Tiang ODP 04',
-    modemType: 'Huawei',
+    modemType: 'XPON ZTE F663NV3A',
     sn: 'HWTC11223344',
     ontStatus: 'NEW',
     pon: '1',
@@ -687,6 +700,26 @@ function loadData() {
     } catch (e) {
       state.customers = INITIAL_CUSTOMERS;
     }
+  }
+
+  // One-time upgrade for legacy short modem names to full brand names (e.g. GPON Fiberhome HG6145D2)
+  if (!localStorage.getItem('hmnet_modem_types_migrated_v9')) {
+    const legacyMap = {
+      'Fiberhome': 'GPON Fiberhome HG6145D2',
+      'GPON ZTE': 'GPON ZTE F6600PV9',
+      'GGCLink': 'GPON ZTE F670L',
+      'XPON ZTE': 'XPON ZTE F663NV3A',
+      'Huawei': 'GPON Fiberhome HG6145F'
+    };
+    let changed = false;
+    state.customers.forEach(c => {
+      if (legacyMap[c.modemType]) {
+        c.modemType = legacyMap[c.modemType];
+        changed = true;
+      }
+    });
+    if (changed) saveCustomers();
+    localStorage.setItem('hmnet_modem_types_migrated_v9', '1');
   }
 
   const expJson = localStorage.getItem(STORAGE_KEYS.EXPENSES);
@@ -1266,8 +1299,8 @@ function renderTablePelanggan() {
         `}
       </td>
       <td class="py-3 px-4">
-        <div class="font-bold text-slate-800">${c.modemType}</div>
-        <div class="text-[11px] font-mono text-slate-500">${c.sn}</div>
+        <div>${getModemTypeBadgeHtml(c.modemType)}</div>
+        <div class="text-[11px] font-mono text-slate-500 mt-1">SN: ${c.sn}</div>
       </td>
       <td class="py-3 px-4 text-center">
         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold border ${ontBadge}">${c.ontStatus}</span>
@@ -1336,7 +1369,7 @@ function openModalPelanggan(customerId = null) {
       document.getElementById('cust-name').value = cust.name;
       document.getElementById('cust-phone').value = cust.phone || '';
       document.getElementById('cust-address').value = cust.address || '';
-      document.getElementById('cust-modem-type').value = cust.modemType;
+      populateModemTypeSelect(cust.modemType);
       document.getElementById('cust-sn').value = cust.sn;
       document.getElementById('cust-ont-status').value = cust.ontStatus;
       document.getElementById('cust-pon').value = cust.pon;
@@ -1348,7 +1381,7 @@ function openModalPelanggan(customerId = null) {
     }
   } else {
     title.textContent = 'Tambah Pelanggan & Spesifikasi ONT';
-    document.getElementById('cust-modem-type').value = 'XPON ZTE';
+    populateModemTypeSelect('GPON Fiberhome HG6145D2');
     document.getElementById('cust-ont-status').value = 'NEW';
     document.getElementById('cust-pon').value = '1';
     document.getElementById('cust-redaman').value = '-18.5';
@@ -1360,6 +1393,262 @@ function openModalPelanggan(customerId = null) {
   previewRedamanColor();
   modal.classList.remove('hidden');
   if (window.lucide) lucide.createIcons();
+}
+
+// =========================================================
+// MANAJEMEN DAFTAR MERK & TYPE MODEM ONT (TAMBAH / EDIT SENDIRI)
+// =========================================================
+function getModemTypesList() {
+  const raw = localStorage.getItem(STORAGE_KEYS.MODEM_TYPES);
+  let list = [];
+  if (!raw) {
+    list = JSON.parse(JSON.stringify(DEFAULT_MODEM_TYPES));
+    saveModemTypesList(list);
+  } else {
+    try {
+      list = JSON.parse(raw);
+      if (!Array.isArray(list) || list.length === 0) {
+        list = JSON.parse(JSON.stringify(DEFAULT_MODEM_TYPES));
+      }
+    } catch (e) {
+      list = JSON.parse(JSON.stringify(DEFAULT_MODEM_TYPES));
+    }
+  }
+
+  // Ensure any modem type used by existing customers is also present in the list
+  let added = false;
+  (state.customers || []).forEach(c => {
+    if (c.modemType && !list.some(m => m.name.toLowerCase() === c.modemType.toLowerCase())) {
+      list.push({
+        name: c.modemType,
+        color: inferModemColor(c.modemType)
+      });
+      added = true;
+    }
+  });
+  if (added) saveModemTypesList(list);
+  return list;
+}
+
+function saveModemTypesList(list) {
+  localStorage.setItem(STORAGE_KEYS.MODEM_TYPES, JSON.stringify(list));
+}
+
+function inferModemColor(nameStr) {
+  const s = String(nameStr || '').toUpperCase();
+  if (s.includes('FIBERHOME')) return 'amber';
+  if (s.includes('XPON') && s.includes('ZTE')) return 'fuchsia';
+  if (s.includes('GPON') && s.includes('ZTE')) return 'green';
+  if (s.includes('HUAWEI')) return 'blue';
+  if (s.includes('GGCLINK')) return 'cyan';
+  return 'amber';
+}
+
+function getModemBadgeColorClass(colorKey) {
+  switch (colorKey) {
+    case 'green':
+      return 'bg-[#22c55e] text-slate-950 border-emerald-600';
+    case 'amber':
+      return 'bg-[#f59e0b] text-slate-950 border-amber-600';
+    case 'fuchsia':
+      return 'bg-[#e879f9] text-slate-950 border-fuchsia-600';
+    case 'blue':
+      return 'bg-sky-200 text-sky-950 border-sky-400';
+    case 'cyan':
+      return 'bg-cyan-200 text-cyan-950 border-cyan-400';
+    default:
+      return 'bg-slate-200 text-slate-900 border-slate-400';
+  }
+}
+
+function getModemTypeBadgeHtml(modemName) {
+  const list = getModemTypesList();
+  const found = list.find(m => m.name.toLowerCase() === String(modemName || '').toLowerCase());
+  const colorKey = found ? found.color : inferModemColor(modemName);
+  const cls = getModemBadgeColorClass(colorKey);
+  return `<span class="inline-block px-2.5 py-1 rounded-md text-[11px] font-extrabold border shadow-2xs ${cls}">${modemName || '-'}</span>`;
+}
+
+function populateModemTypeSelect(selectedValue = '') {
+  const selectEl = document.getElementById('cust-modem-type');
+  if (!selectEl) return;
+
+  const list = getModemTypesList();
+  selectEl.innerHTML = '';
+
+  list.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.name;
+    opt.textContent = item.name;
+    if (selectedValue && item.name.toLowerCase() === selectedValue.toLowerCase()) {
+      opt.selected = true;
+    }
+    selectEl.appendChild(opt);
+  });
+
+  if (selectedValue && !list.some(m => m.name.toLowerCase() === selectedValue.toLowerCase())) {
+    const opt = document.createElement('option');
+    opt.value = selectedValue;
+    opt.textContent = selectedValue;
+    opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+}
+
+function openModalModemTypes() {
+  cancelEditModemType();
+  renderModemTypesList();
+  document.getElementById('modal-modem-types')?.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeModalModemTypes() {
+  document.getElementById('modal-modem-types')?.classList.add('hidden');
+}
+
+function renderModemTypesList() {
+  const container = document.getElementById('modem-types-list-container');
+  if (!container) return;
+
+  const list = getModemTypesList();
+  container.innerHTML = '';
+
+  list.forEach((item, idx) => {
+    const usageCount = state.customers.filter(c => (c.modemType || '').toLowerCase() === item.name.toLowerCase()).length;
+    const badgeCls = getModemBadgeColorClass(item.color);
+
+    const row = document.createElement('div');
+    row.className = 'p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 hover:bg-slate-50 transition';
+    row.innerHTML = `
+      <div class="flex items-center space-x-2.5 min-w-0">
+        <span class="px-2.5 py-1 rounded-md text-xs font-extrabold border ${badgeCls} truncate">${item.name}</span>
+        <span class="text-[10px] font-semibold text-slate-400 shrink-0">(${usageCount} pelanggan)</span>
+      </div>
+      <div class="flex items-center space-x-1 shrink-0">
+        <button type="button" onclick="startEditModemType(${idx})" class="px-2.5 py-1 bg-slate-100 hover:bg-brand-50 text-slate-700 hover:text-brand-700 border border-slate-200 rounded-lg text-[11px] font-bold transition flex items-center space-x-1">
+          <i data-lucide="edit-3" class="w-3 h-3"></i>
+          <span>Edit</span>
+        </button>
+        <button type="button" onclick="deleteModemTypeItem(${idx})" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Hapus merk modem">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function startEditModemType(idx) {
+  const list = getModemTypesList();
+  const item = list[idx];
+  if (!item) return;
+
+  document.getElementById('modem-type-edit-old-name').value = item.name;
+  const nameInput = document.getElementById('modem-type-input-name');
+  const colorSelect = document.getElementById('modem-type-input-color');
+  const lbl = document.getElementById('lbl-modem-type-form');
+  const submitLbl = document.getElementById('btn-submit-modem-type-label');
+  const cancelBtn = document.getElementById('btn-cancel-edit-modem');
+
+  if (nameInput) {
+    nameInput.value = item.name;
+    nameInput.focus();
+  }
+  if (colorSelect) colorSelect.value = item.color || 'amber';
+  if (lbl) lbl.textContent = `Edit Nama Merk / Type Modem ("${item.name}"):`;
+  if (submitLbl) submitLbl.textContent = 'Simpan Perubahan Merk';
+  if (cancelBtn) cancelBtn.classList.remove('hidden');
+}
+
+function cancelEditModemType() {
+  const oldEl = document.getElementById('modem-type-edit-old-name');
+  const nameInput = document.getElementById('modem-type-input-name');
+  const colorSelect = document.getElementById('modem-type-input-color');
+  const lbl = document.getElementById('lbl-modem-type-form');
+  const submitLbl = document.getElementById('btn-submit-modem-type-label');
+  const cancelBtn = document.getElementById('btn-cancel-edit-modem');
+
+  if (oldEl) oldEl.value = '';
+  if (nameInput) nameInput.value = '';
+  if (colorSelect) colorSelect.value = 'amber';
+  if (lbl) lbl.textContent = 'Tambah Merk / Type Modem Baru:';
+  if (submitLbl) submitLbl.textContent = 'Tambah Merk Modem';
+  if (cancelBtn) cancelBtn.classList.add('hidden');
+}
+
+function saveModemTypeItem(e) {
+  e.preventDefault();
+  const oldName = (document.getElementById('modem-type-edit-old-name')?.value || '').trim();
+  const newName = (document.getElementById('modem-type-input-name')?.value || '').trim();
+  const color = document.getElementById('modem-type-input-color')?.value || 'amber';
+
+  if (!newName) return;
+
+  const list = getModemTypesList();
+
+  if (oldName) {
+    // Editing existing modem brand
+    const idx = list.findIndex(m => m.name.toLowerCase() === oldName.toLowerCase());
+    if (idx !== -1) {
+      list[idx] = { name: newName, color };
+    } else {
+      list.push({ name: newName, color });
+    }
+
+    // Also update all customers currently using oldName
+    let updatedCustCount = 0;
+    state.customers.forEach(c => {
+      if ((c.modemType || '').toLowerCase() === oldName.toLowerCase()) {
+        c.modemType = newName;
+        updatedCustCount++;
+      }
+    });
+    if (updatedCustCount > 0) saveCustomers();
+
+    saveModemTypesList(list);
+    populateModemTypeSelect(newName);
+    renderTablePelanggan();
+    cancelEditModemType();
+    renderModemTypesList();
+    showToast(`Merk modem berhasil diubah menjadi "${newName}"! ✅`);
+  } else {
+    // Adding new modem brand
+    const existingIdx = list.findIndex(m => m.name.toLowerCase() === newName.toLowerCase());
+    if (existingIdx !== -1) {
+      list[existingIdx].color = color;
+      showToast(`Warna label untuk "${newName}" berhasil diperbarui!`);
+    } else {
+      list.unshift({ name: newName, color });
+      showToast(`Merk modem "${newName}" berhasil ditambahkan! ✅`);
+    }
+
+    saveModemTypesList(list);
+    populateModemTypeSelect(newName);
+    renderTablePelanggan();
+    cancelEditModemType();
+    renderModemTypesList();
+  }
+}
+
+function deleteModemTypeItem(idx) {
+  const list = getModemTypesList();
+  const item = list[idx];
+  if (!item) return;
+
+  if (list.length <= 1) {
+    alert('Minimal harus ada 1 merk modem di dalam daftar.');
+    return;
+  }
+
+  if (confirm(`Hapus merk modem "${item.name}" dari daftar pilihan?`)) {
+    list.splice(idx, 1);
+    saveModemTypesList(list);
+    populateModemTypeSelect();
+    renderModemTypesList();
+    showToast(`Merk modem "${item.name}" telah dihapus dari daftar.`);
+  }
 }
 
 function closeModalPelanggan() {
