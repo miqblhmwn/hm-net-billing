@@ -403,14 +403,26 @@
             </h1>
             <p class="text-xs text-slate-500 mt-0.5">Pendapatan, beban operasional bandwidth, keuntungan bersih, dan status redaman optik.</p>
           </div>
-          <div class="flex items-center space-x-3">
-            <label class="text-xs font-semibold text-slate-600">Periode:</label>
-            <select id="dash-month-select" onchange="renderDashboard()" class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <!-- Populated via JS -->
-            </select>
-            <select id="dash-year-select" onchange="renderDashboard()" class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
-              <!-- Populated via JS -->
-            </select>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="flex items-center space-x-1.5">
+              <label class="text-xs font-semibold text-slate-600">Periode:</label>
+              <select id="dash-month-select" onchange="renderDashboard()" class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <!-- Populated via JS -->
+              </select>
+              <select id="dash-year-select" onchange="renderDashboard()" class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <!-- Populated via JS -->
+              </select>
+            </div>
+            <div class="flex items-center space-x-1.5">
+              <label class="text-xs font-semibold text-slate-600">Jalur:</label>
+              <select id="dash-pon-select" onchange="renderDashboard()" class="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                <option value="ALL">Semua Jalur PON</option>
+                <option value="1">Jalur PON 1</option>
+                <option value="2">Jalur PON 2</option>
+                <option value="3">Jalur PON 3</option>
+                <option value="4">Jalur PON 4</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -596,7 +608,7 @@
       <!-- ========================================== -->
       <section id="tab-pelanggan" class="hidden space-y-6">
         
-        <!-- Header bar with search & actions -->
+        <!-- Header bar with actions -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
           <div>
             <h2 class="text-lg font-black text-slate-900">Master Data Pelanggan & Perangkat ONT</h2>
@@ -604,51 +616,20 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <!-- Search Box -->
-            <div class="relative flex-1 sm:w-64">
-              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="search-pelanggan" oninput="renderTablePelanggan()" placeholder="Cari Nama, SN, atau Tipe..." class="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none">
-            </div>
-
-            <!-- Filter PON -->
-            <select id="filter-pon" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-700 focus:outline-none">
-              <option value="ALL">Semua PON</option>
-              <option value="1">Jalur PON 1</option>
-              <option value="2">Jalur PON 2</option>
-              <option value="3">Jalur PON 3</option>
-              <option value="4">Jalur PON 4</option>
-            </select>
-
-            <!-- Filter Status ONT -->
-            <select id="filter-status-ont" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-700 focus:outline-none">
-              <option value="ALL">Semua Status ONT</option>
-              <option value="NEW">NEW</option>
-              <option value="SECOND">SECOND</option>
-              <option value="GANTI">GANTI</option>
-            </select>
-
-            <!-- Filter Redaman -->
-            <select id="filter-redaman" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-medium text-slate-700 focus:outline-none">
-              <option value="ALL">Semua Redaman</option>
-              <option value="GOOD">Hijau (Bagus)</option>
-              <option value="WARNING">Kuning (Waspada)</option>
-              <option value="BAD">Merah (Kritis)</option>
-            </select>
-
             <!-- Edit Batas Referensi Redaman Button -->
-            <button onclick="openModalRedamanConfig()" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Edit batas referensi nilai redaman optik (Hijau, Kuning, Merah)">
+            <button onclick="openModalRedamanConfig()" class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Edit batas referensi nilai redaman optik (Hijau, Kuning, Merah)">
               <i data-lucide="sliders" class="w-4 h-4 text-emerald-700"></i>
               <span>Edit Batas Redaman</span>
             </button>
 
             <!-- Kelola Merk / Type Modem Button -->
-            <button onclick="openModalModemTypes()" class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Tambah atau edit daftar nama merk & type modem ONT">
+            <button onclick="openModalModemTypes()" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center space-x-1.5" title="Tambah atau edit daftar nama merk & type modem ONT">
               <i data-lucide="router" class="w-4 h-4 text-amber-700"></i>
               <span>Kelola Type Modem</span>
             </button>
 
             <!-- Broadcast Gangguan Button -->
-            <button onclick="openBroadcastSubtab('outage')" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5" title="Kirim pesan serentak informasi gangguan jaringan ke pelanggan">
+            <button onclick="openBroadcastSubtab('outage')" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5" title="Kirim pesan serentak informasi gangguan jaringan ke pelanggan">
               <i data-lucide="radio-tower" class="w-4 h-4"></i>
               <span>Info Gangguan WA</span>
             </button>
@@ -656,8 +637,78 @@
             <!-- Tambah Pelanggan Button -->
             <button onclick="openModalPelanggan()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center space-x-1.5">
               <i data-lucide="plus" class="w-4 h-4"></i>
-              <span>Tambah Pelanggan</span>
+              <span>+ Tambah Pelanggan</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar Pelanggan -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="flex items-center space-x-2 text-xs font-black text-slate-800">
+              <i data-lucide="filter" class="w-4 h-4 text-brand-600"></i>
+              <span>Filter Data Pelanggan & Perangkat</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span id="pelanggan-filter-counter" class="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+                Menampilkan <span id="count-displayed-pelanggan" class="text-brand-700">0</span> dari <span id="count-total-pelanggan">0</span> total
+              </span>
+              <button type="button" onclick="resetPelangganFilters()" class="text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition flex items-center space-x-1" title="Reset filter pelanggan">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span>Reset</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            <!-- 1. Search Box -->
+            <div class="relative sm:col-span-2 md:col-span-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+              <input type="text" id="search-pelanggan" oninput="renderTablePelanggan()" placeholder="Cari Nama, SN, No WA, Alamat..." class="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:bg-white focus:outline-none font-medium">
+            </div>
+
+            <!-- 2. Filter PON -->
+            <select id="filter-pon" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Jalur PON</option>
+              <option value="1">Jalur PON 1</option>
+              <option value="2">Jalur PON 2</option>
+              <option value="3">Jalur PON 3</option>
+              <option value="4">Jalur PON 4</option>
+            </select>
+
+            <!-- 3. Filter Status ONT -->
+            <select id="filter-status-ont" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Status Fisik ONT</option>
+              <option value="NEW">Kondisi: NEW (Baru)</option>
+              <option value="SECOND">Kondisi: SECOND</option>
+              <option value="GANTI">Status: GANTI</option>
+            </select>
+
+            <!-- 4. Filter Redaman -->
+            <select id="filter-redaman" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Tingkat Redaman</option>
+              <option value="GOOD">Hijau: Normal / Bagus (&ge; -23 dB)</option>
+              <option value="WARNING">Kuning: Waspada (-24 s.d -26 dB)</option>
+              <option value="BAD">Merah: Kritis (&lt; -27 dB)</option>
+            </select>
+
+            <!-- 5. Filter Merk / Type Modem -->
+            <select id="filter-pelanggan-modem" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Merk / Tipe Modem</option>
+            </select>
+
+            <!-- 6. Filter Paket Speed -->
+            <select id="filter-pelanggan-speed" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Paket Kecepatan</option>
+            </select>
+
+            <!-- 7. Filter Status Pelanggan -->
+            <select id="filter-pelanggan-status" onchange="renderTablePelanggan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Status Layanan</option>
+              <option value="AKTIF">Layanan: AKTIF</option>
+              <option value="ISOLIR">Layanan: ISOLIR</option>
+              <option value="NONAKTIF">Layanan: NONAKTIF</option>
+            </select>
           </div>
         </div>
 
@@ -774,6 +825,56 @@
           </div>
           <div class="text-[11px] text-slate-400">
             💡 Tips: Klik langsung tombol/sel pembayaran untuk mencatat uang masuk.
+          </div>
+        </div>
+
+        <!-- Filter & Pencarian Tagihan Bar (Multi-Kriteria) -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="flex items-center space-x-2 text-xs font-black text-slate-800">
+              <i data-lucide="filter" class="w-4 h-4 text-brand-600"></i>
+              <span>Filter Data Tagihan & Pembayaran</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span id="grid-filter-counter" class="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+                Menampilkan 0 Pelanggan
+              </span>
+              <button type="button" onclick="resetGridFilters()" class="text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition flex items-center space-x-1" title="Reset semua filter tagihan">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span>Reset</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <!-- 1. Pencarian -->
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+              <input type="text" id="search-grid" oninput="renderGridTagihan()" placeholder="Cari Nama, PON, SN, Paket..." class="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none font-medium">
+            </div>
+
+            <!-- 2. Filter Status Pembayaran Bulan Ini -->
+            <select id="filter-grid-status" onchange="renderGridTagihan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Status Bayar (Bulan Ini)</option>
+              <option value="BELUM_ALL">Semua Belum Lunas (Belum + Sebagian)</option>
+              <option value="BELUM">Belum Bayar (Rp 0)</option>
+              <option value="SEBAGIAN">Bayar Sebagian (Cicil)</option>
+              <option value="LUNAS">Lunas</option>
+            </select>
+
+            <!-- 3. Filter Jalur PON -->
+            <select id="filter-grid-pon" onchange="renderGridTagihan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Jalur PON</option>
+              <option value="1">Jalur PON 1</option>
+              <option value="2">Jalur PON 2</option>
+              <option value="3">Jalur PON 3</option>
+              <option value="4">Jalur PON 4</option>
+            </select>
+
+            <!-- 4. Filter Paket Speed / Tarif -->
+            <select id="filter-grid-tariff" onchange="renderGridTagihan()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-semibold text-slate-700 focus:bg-white focus:outline-none">
+              <option value="ALL">Semua Paket / Tarif</option>
+            </select>
           </div>
         </div>
 
@@ -916,10 +1017,36 @@
         </div>
 
         <!-- Expense List Table -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="text-sm font-bold text-slate-900">Daftar Pengeluaran & Biaya Operasional</h3>
-            <span class="text-xs text-slate-500">Histori Pengeluaran HM NET</span>
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-3">
+          <div class="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Daftar Pengeluaran & Biaya Operasional</h3>
+              <p id="expense-filter-counter" class="text-xs text-slate-500">Histori Pengeluaran HM NET</p>
+            </div>
+            
+            <!-- Filter Pengeluaran Bar -->
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="relative w-44">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                <input type="text" id="search-expenses" oninput="renderExpenses()" placeholder="Cari keterangan..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none font-medium">
+              </div>
+              <select id="filter-expense-category" onchange="renderExpenses()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                <option value="ALL">Semua Kategori</option>
+              </select>
+              <select id="filter-expense-year" onchange="renderExpenses()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                <option value="ALL">Semua Tahun</option>
+                <option value="2026" selected>2026</option>
+                <option value="2025">2025</option>
+                <option value="2027">2027</option>
+              </select>
+              <select id="filter-expense-month" onchange="renderExpenses()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                <option value="ALL">Semua Bulan</option>
+              </select>
+              <button type="button" onclick="resetExpenseFilters()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Reset filter pengeluaran">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span>Reset</span>
+              </button>
+            </div>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
@@ -1000,14 +1127,32 @@
 
         <!-- Table View of Users -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div class="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <h3 class="text-sm font-bold text-slate-900">Daftar Akun Pengguna & Kewenangan</h3>
-              <p class="text-[11px] text-slate-400">Akun anak hanya dapat mengakses menu yang dicentang oleh Admin Induk.</p>
+              <p id="users-filter-counter" class="text-[11px] text-slate-400">Akun anak hanya dapat mengakses menu yang dicentang oleh Admin Induk.</p>
             </div>
-            <div class="relative sm:w-64">
-              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="search-users" oninput="renderTableUsers()" placeholder="Cari nama atau username..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="relative w-44">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
+                <input type="text" id="search-users" oninput="renderTableUsers()" placeholder="Cari nama / username..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none font-medium">
+              </div>
+              <select id="filter-user-role" onchange="renderTableUsers()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                <option value="ALL">Semua Peran</option>
+                <option value="SUPER_ADMIN">Admin Utama (Induk)</option>
+                <option value="TEKNISI">Teknisi Lapangan</option>
+                <option value="KASIR">Kasir & Tagihan</option>
+                <option value="CUSTOM">Staf Kustom</option>
+              </select>
+              <select id="filter-user-status" onchange="renderTableUsers()" class="text-xs bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                <option value="ALL">Semua Status</option>
+                <option value="AKTIF">Hanya Aktif</option>
+                <option value="NONAKTIF">Hanya Nonaktif</option>
+              </select>
+              <button type="button" onclick="resetUserFilters()" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Reset filter akun">
+                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                <span>Reset</span>
+              </button>
             </div>
           </div>
 
@@ -1148,10 +1293,10 @@
                 </div>
 
                 <!-- Search & Filters -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                   <div class="relative">
                     <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-                    <input type="text" id="bcast-unpaid-search" oninput="renderBroadcastUnpaidTable()" placeholder="Cari nama / no WA..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <input type="text" id="bcast-unpaid-search" oninput="renderBroadcastUnpaidTable()" placeholder="Cari nama / no WA..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
                   </div>
                   <select id="bcast-unpaid-status-filter" onchange="renderBroadcastUnpaidTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
                     <option value="ALL_UNPAID">Semua Belum Lunas (Belum + Cicil)</option>
@@ -1165,6 +1310,9 @@
                     <option value="3">Jalur PON 3</option>
                     <option value="4">Jalur PON 4</option>
                   </select>
+                  <select id="bcast-unpaid-tariff-filter" onchange="renderBroadcastUnpaidTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                    <option value="ALL">Semua Tarif / Paket</option>
+                  </select>
                 </div>
 
                 <!-- Quick Check/Uncheck Toolbar -->
@@ -1177,6 +1325,10 @@
                     <button type="button" onclick="toggleSelectAllUnpaid(false)" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-semibold transition flex items-center space-x-1">
                       <i data-lucide="square" class="w-3.5 h-3.5"></i>
                       <span>Hapus Ceklis</span>
+                    </button>
+                    <button type="button" onclick="resetBroadcastUnpaidFilters()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center space-x-1" title="Reset filter broadcast belum bayar">
+                      <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                      <span>Reset Filter</span>
                     </button>
                   </div>
                   <div class="text-xs font-bold text-slate-700">
@@ -1318,11 +1470,11 @@
                   </div>
                 </div>
 
-                <!-- Search & PON Filter -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <!-- Search & Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div class="relative">
                     <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-                    <input type="text" id="bcast-outage-search" oninput="renderBroadcastOutageTable()" placeholder="Cari nama pelanggan, alamat, atau SN..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    <input type="text" id="bcast-outage-search" oninput="renderBroadcastOutageTable()" placeholder="Cari nama pelanggan, alamat, atau SN..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium">
                   </div>
                   <select id="bcast-outage-pon-filter" onchange="renderBroadcastOutageTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
                     <option value="ALL">Tampilkan Semua PON</option>
@@ -1330,6 +1482,12 @@
                     <option value="2">Hanya Jalur PON 2</option>
                     <option value="3">Hanya Jalur PON 3</option>
                     <option value="4">Hanya Jalur PON 4</option>
+                  </select>
+                  <select id="bcast-outage-redaman-filter" onchange="renderBroadcastOutageTable()" class="text-xs bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-semibold text-slate-700 focus:outline-none">
+                    <option value="ALL">Semua Tingkat Redaman</option>
+                    <option value="GOOD">Hijau (&ge; -23 dB)</option>
+                    <option value="WARNING">Kuning (-24 s.d -26 dB)</option>
+                    <option value="BAD">Merah Kritis (&lt; -27 dB)</option>
                   </select>
                 </div>
 
@@ -1346,6 +1504,10 @@
                     </button>
                     <button type="button" onclick="selectOutageCriticalOnly()" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg text-[11px] font-bold transition">
                       🔴 Ceklis Redaman Kritis (&lt; -27 dB)
+                    </button>
+                    <button type="button" onclick="resetBroadcastOutageFilters()" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-bold transition flex items-center space-x-1" title="Reset filter broadcast gangguan">
+                      <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                      <span>Reset Filter</span>
                     </button>
                   </div>
                   <div class="text-xs font-bold text-slate-700">
@@ -2560,7 +2722,7 @@
   </div>
 
   <!-- External Application Logic Script -->
-  <script src="app.js?v=20261107_v17"></script>
+  <script src="app.js?v=20261108_v19"></script>
 
   <script>
     // Initialize Lucide icons on start

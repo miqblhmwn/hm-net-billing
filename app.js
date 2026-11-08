@@ -1241,10 +1241,187 @@ function setupDateSelectors() {
   populate(bcastYear, yearItems, state.selectedYear);
   populate(bcastMonth, monthItems, state.selectedMonth);
 
+  const expYear = document.getElementById('filter-expense-year');
+  const expMonth = document.getElementById('filter-expense-month');
+  if (expYear) {
+    const curY = expYear.value || 'ALL';
+    expYear.innerHTML = '<option value="ALL">Semua Tahun</option>';
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `Tahun ${y}`;
+      if (curY == y) opt.selected = true;
+      expYear.appendChild(opt);
+    });
+  }
+  if (expMonth) {
+    const curM = expMonth.value || 'ALL';
+    expMonth.innerHTML = '<option value="ALL">Semua Bulan</option>';
+    MONTH_NAMES.forEach((m, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx + 1;
+      opt.textContent = m;
+      if (curM == idx + 1) opt.selected = true;
+      expMonth.appendChild(opt);
+    });
+  }
+
   if (expPeriod) {
     const mm = String(state.selectedMonth).padStart(2, '0');
     expPeriod.value = `${state.selectedYear}-${mm}`;
   }
+
+  populateFilterDropdowns();
+}
+
+// ==========================================
+// UNIFIED FILTER SYSTEM (SEMUA MENU)
+// ==========================================
+function populateFilterDropdowns() {
+  // 1. Populate Dropdown Tarif Tagihan (#filter-grid-tariff) & Broadcast (#bcast-unpaid-tariff-filter)
+  const gridTariffSelect = document.getElementById('filter-grid-tariff');
+  const bcastTariffSelect = document.getElementById('bcast-unpaid-tariff-filter');
+  const uniqueTariffs = [...new Set((state.customers || []).map(c => Number(c.price) || 0))].sort((a, b) => a - b);
+
+  [gridTariffSelect, bcastTariffSelect].forEach(sel => {
+    if (!sel) return;
+    const curVal = sel.value || 'ALL';
+    sel.innerHTML = '<option value="ALL">Semua Paket / Tarif</option>';
+    uniqueTariffs.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = String(t);
+      opt.textContent = t === 0 ? 'Rp 0 (Gratis / 1 Mbps)' : `Rp ${formatRupiah(t)}`;
+      if (curVal === String(t)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+
+  // 2. Populate Dropdown Merk / Tipe Modem (#filter-pelanggan-modem)
+  const custModemSelect = document.getElementById('filter-pelanggan-modem');
+  if (custModemSelect) {
+    const curVal = custModemSelect.value || 'ALL';
+    const modemTypes = getModemTypesList();
+    custModemSelect.innerHTML = '<option value="ALL">Semua Merk / Tipe Modem</option>';
+    modemTypes.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name;
+      opt.textContent = m.name;
+      if (curVal === m.name) opt.selected = true;
+      custModemSelect.appendChild(opt);
+    });
+  }
+
+  // 3. Populate Dropdown Paket Kecepatan (#filter-pelanggan-speed)
+  const custSpeedSelect = document.getElementById('filter-pelanggan-speed');
+  if (custSpeedSelect) {
+    const curVal = custSpeedSelect.value || 'ALL';
+    const speeds = [...new Set((state.customers || []).map(c => c.speed).filter(Boolean))].sort((a, b) => parseInt(a) - parseInt(b));
+    custSpeedSelect.innerHTML = '<option value="ALL">Semua Paket Kecepatan</option>';
+    speeds.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      if (curVal === s) opt.selected = true;
+      custSpeedSelect.appendChild(opt);
+    });
+  }
+
+  // 4. Populate Dropdown Kategori Pengeluaran (#filter-expense-category)
+  const expCatSelect = document.getElementById('filter-expense-category');
+  if (expCatSelect) {
+    const curVal = expCatSelect.value || 'ALL';
+    const defaultCats = ['Bandwidth Utama', 'Operasional', 'Perangkat / Kabel', 'Konsumsi & Snack', 'Lainnya'];
+    const usedCats = [...new Set((state.expenses || []).map(e => e.category).filter(Boolean))];
+    const allCats = [...new Set([...defaultCats, ...usedCats])];
+    expCatSelect.innerHTML = '<option value="ALL">Semua Kategori</option>';
+    allCats.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      if (curVal === cat) opt.selected = true;
+      expCatSelect.appendChild(opt);
+    });
+  }
+}
+
+function resetGridFilters() {
+  const s = document.getElementById('search-grid');
+  const st = document.getElementById('filter-grid-status');
+  const p = document.getElementById('filter-grid-pon');
+  const t = document.getElementById('filter-grid-tariff');
+  if (s) s.value = '';
+  if (st) st.value = 'ALL';
+  if (p) p.value = 'ALL';
+  if (t) t.value = 'ALL';
+  renderGridTagihan();
+  showToast('Filter tagihan telah di-reset.');
+}
+
+function resetPelangganFilters() {
+  const s = document.getElementById('search-pelanggan');
+  const p = document.getElementById('filter-pon');
+  const ont = document.getElementById('filter-status-ont');
+  const red = document.getElementById('filter-redaman');
+  const m = document.getElementById('filter-pelanggan-modem');
+  const spd = document.getElementById('filter-pelanggan-speed');
+  const st = document.getElementById('filter-pelanggan-status');
+  if (s) s.value = '';
+  if (p) p.value = 'ALL';
+  if (ont) ont.value = 'ALL';
+  if (red) red.value = 'ALL';
+  if (m) m.value = 'ALL';
+  if (spd) spd.value = 'ALL';
+  if (st) st.value = 'ALL';
+  renderTablePelanggan();
+  showToast('Filter pelanggan telah di-reset.');
+}
+
+function resetExpenseFilters() {
+  const s = document.getElementById('search-expenses');
+  const c = document.getElementById('filter-expense-category');
+  const y = document.getElementById('filter-expense-year');
+  const m = document.getElementById('filter-expense-month');
+  if (s) s.value = '';
+  if (c) c.value = 'ALL';
+  if (y) y.value = 'ALL';
+  if (m) m.value = 'ALL';
+  renderExpenses();
+  showToast('Filter pengeluaran telah di-reset.');
+}
+
+function resetUserFilters() {
+  const s = document.getElementById('search-users');
+  const r = document.getElementById('filter-user-role');
+  const st = document.getElementById('filter-user-status');
+  if (s) s.value = '';
+  if (r) r.value = 'ALL';
+  if (st) st.value = 'ALL';
+  renderTableUsers();
+  showToast('Filter akun telah di-reset.');
+}
+
+function resetBroadcastUnpaidFilters() {
+  const s = document.getElementById('bcast-unpaid-search');
+  const st = document.getElementById('bcast-unpaid-status-filter');
+  const p = document.getElementById('bcast-unpaid-pon-filter');
+  const t = document.getElementById('bcast-unpaid-tariff-filter');
+  if (s) s.value = '';
+  if (st) st.value = 'ALL_UNPAID';
+  if (p) p.value = 'ALL';
+  if (t) t.value = 'ALL';
+  renderBroadcastUnpaidTable();
+  showToast('Filter broadcast tagihan telah di-reset.');
+}
+
+function resetBroadcastOutageFilters() {
+  const s = document.getElementById('bcast-outage-search');
+  const p = document.getElementById('bcast-outage-pon-filter');
+  const r = document.getElementById('bcast-outage-redaman-filter');
+  if (s) s.value = '';
+  if (p) p.value = 'ALL';
+  if (r) r.value = 'ALL';
+  renderBroadcastOutageTable();
+  showToast('Filter broadcast gangguan telah di-reset.');
 }
 
 // ==========================================
@@ -1607,11 +1784,18 @@ function previewRedamanColor() {
 function renderDashboard() {
   const mSelect = document.getElementById('dash-month-select');
   const ySelect = document.getElementById('dash-year-select');
+  const ponSelect = document.getElementById('dash-pon-select');
 
   if (mSelect) state.selectedMonth = parseInt(mSelect.value) || state.selectedMonth;
   if (ySelect) state.selectedYear = parseInt(ySelect.value) || state.selectedYear;
+  const selectedPon = ponSelect ? ponSelect.value : 'ALL';
 
-  const activeMonthBills = state.bills.filter(b => b.year === state.selectedYear && b.month === state.selectedMonth);
+  const relevantCustomers = selectedPon === 'ALL'
+    ? state.customers
+    : state.customers.filter(c => String(c.pon) === String(selectedPon));
+  const relevantCustomerIds = new Set(relevantCustomers.map(c => c.id));
+
+  const activeMonthBills = state.bills.filter(b => b.year === state.selectedYear && b.month === state.selectedMonth && relevantCustomerIds.has(b.customerId));
 
   const totalPemasukan = activeMonthBills.reduce((acc, curr) => acc + (Number(curr.amountPaid) || 0), 0);
   const paidCount = activeMonthBills.filter(b => b.status === 'LUNAS').length;
@@ -1656,7 +1840,7 @@ function renderDashboard() {
   let countWarning = 0;
   let countBad = 0;
 
-  state.customers.forEach(c => {
+  relevantCustomers.forEach(c => {
     const cat = getRedamanClassification(c.redaman).category;
     if (cat === 'GOOD') countGood++;
     else if (cat === 'WARNING') countWarning++;
@@ -1671,6 +1855,7 @@ function renderDashboard() {
   if (rgEl) rgEl.textContent = `${countGood} Unit`;
   if (rwEl) rwEl.textContent = `${countWarning} Unit`;
   if (rbEl) rbEl.textContent = `${countBad} Unit`;
+  if (toEl) toEl.textContent = selectedPon === 'ALL' ? `${state.customers.length} Pelanggan` : `${relevantCustomers.length} Pelanggan (PON ${selectedPon})`;
   if (toEl) toEl.textContent = `${state.customers.length} Pelanggan`;
 
   renderFinancialChart();
@@ -1776,21 +1961,31 @@ function renderTablePelanggan() {
   if (!tbody) return;
 
   updateRedamanReferenceLabels();
+  populateFilterDropdowns();
 
   const searchQuery = (document.getElementById('search-pelanggan')?.value || '').toLowerCase().trim();
   const filterPon = document.getElementById('filter-pon')?.value || 'ALL';
   const filterStatusOnt = document.getElementById('filter-status-ont')?.value || 'ALL';
   const filterRedaman = document.getElementById('filter-redaman')?.value || 'ALL';
+  const filterModem = document.getElementById('filter-pelanggan-modem')?.value || 'ALL';
+  const filterSpeed = document.getElementById('filter-pelanggan-speed')?.value || 'ALL';
+  const filterStatus = document.getElementById('filter-pelanggan-status')?.value || 'ALL';
 
   const filtered = state.customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery) ||
+    const matchesSearch = !searchQuery ||
+                          c.name.toLowerCase().includes(searchQuery) ||
                           c.sn.toLowerCase().includes(searchQuery) ||
                           c.modemType.toLowerCase().includes(searchQuery) ||
-                          (c.address && c.address.toLowerCase().includes(searchQuery));
+                          (c.phone && c.phone.includes(searchQuery)) ||
+                          (c.address && c.address.toLowerCase().includes(searchQuery)) ||
+                          (c.speed && c.speed.toLowerCase().includes(searchQuery));
     const matchesPon = filterPon === 'ALL' || String(c.pon) === String(filterPon);
     const matchesOnt = filterStatusOnt === 'ALL' || c.ontStatus === filterStatusOnt;
     const matchesRedaman = filterRedaman === 'ALL' || getRedamanClassification(c.redaman).category === filterRedaman;
-    return matchesSearch && matchesPon && matchesOnt && matchesRedaman;
+    const matchesModem = filterModem === 'ALL' || c.modemType === filterModem;
+    const matchesSpeed = filterSpeed === 'ALL' || c.speed === filterSpeed;
+    const matchesStatus = filterStatus === 'ALL' || (c.status || 'AKTIF') === filterStatus;
+    return matchesSearch && matchesPon && matchesOnt && matchesRedaman && matchesModem && matchesSpeed && matchesStatus;
   });
 
   tbody.innerHTML = '';
@@ -1798,9 +1993,12 @@ function renderTablePelanggan() {
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="10" class="py-8 text-center text-slate-400">
-          <i data-lucide="inbox" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
-          Tidak ada data pelanggan yang cocok dengan kriteria pencarian.
+        <td colspan="10" class="py-12 text-center text-slate-400 font-medium">
+          <i data-lucide="filter-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+          Tidak ada data pelanggan yang cocok dengan kriteria filter saat ini.
+          <div class="mt-2">
+            <button onclick="resetPelangganFilters()" class="px-3 py-1 bg-brand-50 text-brand-700 font-bold rounded-lg border border-brand-200 hover:bg-brand-100 transition text-xs">Reset Semua Filter</button>
+          </div>
         </td>
       </tr>
     `;
@@ -2305,21 +2503,96 @@ function renderGridTagihan() {
   if (ySelect) state.selectedYear = parseInt(ySelect.value) || state.selectedYear;
   if (mSelect) state.selectedMonth = parseInt(mSelect.value) || state.selectedMonth;
 
+  const currentYear = state.selectedYear;
+  const currentMonth = state.selectedMonth;
+
+  // Filter criteria
+  const searchInput = document.getElementById('search-grid');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const statusFilter = document.getElementById('filter-grid-status')?.value || 'ALL';
+  const ponFilter = document.getElementById('filter-grid-pon')?.value || 'ALL';
+  const tariffFilter = document.getElementById('filter-grid-tariff')?.value || 'ALL';
+
+  const filteredCustomers = (state.customers || []).filter(c => {
+    // 1. Text Search
+    if (query) {
+      const matchName = (c.name || '').toLowerCase().includes(query);
+      const matchPon = `pon ${c.pon}`.toLowerCase().includes(query) || String(c.pon || '').toLowerCase().includes(query);
+      const matchSn = (c.sn || '').toLowerCase().includes(query);
+      const matchSpeed = (c.speed || '').toLowerCase().includes(query);
+      const matchPhone = (c.phone || '').toLowerCase().includes(query);
+      const matchAddr = (c.address || '').toLowerCase().includes(query);
+      if (!matchName && !matchPon && !matchSn && !matchSpeed && !matchPhone && !matchAddr) {
+        return false;
+      }
+    }
+
+    // 2. PON Filter
+    if (ponFilter !== 'ALL' && String(c.pon) !== String(ponFilter)) {
+      return false;
+    }
+
+    // 3. Tariff Filter
+    if (tariffFilter !== 'ALL' && String(Number(c.price) || 0) !== String(tariffFilter)) {
+      return false;
+    }
+
+    // 4. Status Filter (Evaluated against the selected active month & year)
+    if (statusFilter !== 'ALL') {
+      const bill = state.bills.find(b => b.customerId === c.id && b.year === currentYear && b.month === currentMonth);
+      const bStatus = bill ? bill.status : 'BELUM';
+      if (statusFilter === 'LUNAS' && bStatus !== 'LUNAS') return false;
+      if (statusFilter === 'SEBAGIAN' && bStatus !== 'SEBAGIAN') return false;
+      if (statusFilter === 'BELUM' && bStatus !== 'BELUM') return false;
+      if (statusFilter === 'BELUM_ALL' && bStatus === 'LUNAS') return false; // Belum Lunas mencakup Belum & Sebagian
+    }
+
+    return true;
+  });
+
+  // Update filter counter badge
+  const counterEl = document.getElementById('grid-filter-counter');
+  if (counterEl) {
+    const totalCust = (state.customers || []).length;
+    if (filteredCustomers.length === totalCust) {
+      counterEl.textContent = `Menampilkan semua: ${totalCust} Pelanggan`;
+    } else {
+      counterEl.textContent = `Menampilkan: ${filteredCustomers.length} dari ${totalCust} Pelanggan`;
+    }
+  }
+
   if (state.gridMode === 'matrix') {
-    renderGridMatrix();
+    renderGridMatrix(filteredCustomers);
   } else {
-    renderGridSingleMonth();
+    renderGridSingleMonth(filteredCustomers);
   }
 }
 
-function renderGridMatrix() {
+function renderGridMatrix(customersList) {
   const tbody = document.getElementById('tbody-grid-matrix');
   if (!tbody) return;
 
   tbody.innerHTML = '';
   const currentYear = state.selectedYear;
+  const list = customersList !== undefined ? customersList : (state.customers || []);
 
-  state.customers.forEach((c, idx) => {
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="16" class="py-12 text-center text-slate-400 font-medium">
+          <i data-lucide="filter-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+          <div>Tidak ada data tagihan yang sesuai dengan filter pencarian.</div>
+          <button onclick="resetGridFilters()" class="mt-2 px-3 py-1 bg-brand-50 text-brand-700 font-bold rounded-lg border border-brand-200 hover:bg-brand-100 transition text-xs">
+            Reset Semua Filter
+          </button>
+        </td>
+      </tr>
+    `;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  list.forEach((c, idx) => {
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50 border-b border-slate-200 transition';
 
@@ -2391,15 +2664,32 @@ function renderGridMatrix() {
   if (window.lucide) lucide.createIcons();
 }
 
-function renderGridSingleMonth() {
+function renderGridSingleMonth(customersList) {
   const tbody = document.getElementById('tbody-grid-single');
   if (!tbody) return;
 
   tbody.innerHTML = '';
   const currentYear = state.selectedYear;
   const currentMonth = state.selectedMonth;
+  const list = customersList !== undefined ? customersList : (state.customers || []);
 
-  state.customers.forEach((c, idx) => {
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="py-12 text-center text-slate-400 font-medium">
+          <i data-lucide="filter-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+          <div>Tidak ada data tagihan yang sesuai dengan filter pencarian bulan ini.</div>
+          <button onclick="resetGridFilters()" class="mt-2 px-3 py-1 bg-brand-50 text-brand-700 font-bold rounded-lg border border-brand-200 hover:bg-brand-100 transition text-xs">
+            Reset Semua Filter
+          </button>
+        </td>
+      </tr>
+    `;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  list.forEach((c, idx) => {
     let bill = state.bills.find(b => b.customerId === c.id && b.year === currentYear && b.month === currentMonth);
     
     if (!bill) {
@@ -2923,10 +3213,68 @@ function renderExpenses() {
         </td>
       </tr>
     `;
+    const counterEl = document.getElementById('expense-filter-counter');
+    if (counterEl) counterEl.textContent = 'Menampilkan semua: 0 Catatan';
     return;
   }
 
-  const sortedExpenses = [...state.expenses].sort((a, b) => new Date(b.date || '1970-01-01') - new Date(a.date || '1970-01-01'));
+  // Filter expenses
+  const searchInput = document.getElementById('search-expenses');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const catFilter = document.getElementById('filter-expense-category')?.value || 'ALL';
+  const yearFilter = document.getElementById('filter-expense-year')?.value || 'ALL';
+  const monthFilter = document.getElementById('filter-expense-month')?.value || 'ALL';
+
+  let filteredExpenses = [...state.expenses];
+
+  if (query) {
+    filteredExpenses = filteredExpenses.filter(e => 
+      (e.notes && e.notes.toLowerCase().includes(query)) ||
+      (e.category && e.category.toLowerCase().includes(query)) ||
+      (e.date && e.date.toLowerCase().includes(query))
+    );
+  }
+
+  if (catFilter !== 'ALL') {
+    filteredExpenses = filteredExpenses.filter(e => e.category === catFilter);
+  }
+
+  if (yearFilter !== 'ALL') {
+    filteredExpenses = filteredExpenses.filter(e => String(e.year) === String(yearFilter));
+  }
+
+  if (monthFilter !== 'ALL') {
+    filteredExpenses = filteredExpenses.filter(e => String(e.month) === String(monthFilter));
+  }
+
+  // Update expense filter counter
+  const counterEl = document.getElementById('expense-filter-counter');
+  if (counterEl) {
+    const totalExp = state.expenses.length;
+    if (filteredExpenses.length === totalExp) {
+      counterEl.textContent = `Menampilkan semua: ${totalExp} Catatan`;
+    } else {
+      counterEl.textContent = `Menampilkan: ${filteredExpenses.length} dari ${totalExp} Catatan`;
+    }
+  }
+
+  if (filteredExpenses.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-10 text-center text-slate-400 font-medium">
+          <i data-lucide="filter-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+          <div>Tidak ada data pengeluaran yang sesuai dengan filter pencarian.</div>
+          <button onclick="resetExpenseFilters()" class="mt-2 px-3 py-1 bg-brand-50 text-brand-700 font-bold rounded-lg border border-brand-200 hover:bg-brand-100 transition text-xs">
+            Reset Semua Filter
+          </button>
+        </td>
+      </tr>
+    `;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  const sortedExpenses = [...filteredExpenses].sort((a, b) => new Date(b.date || '1970-01-01') - new Date(a.date || '1970-01-01'));
 
   sortedExpenses.forEach((exp, idx) => {
     const tr = document.createElement('tr');
@@ -3189,6 +3537,8 @@ function renderTableUsers() {
   const users = getUsersList();
   const searchInput = document.getElementById('search-users');
   const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const roleFilter = document.getElementById('filter-user-role')?.value || 'ALL';
+  const statusFilter = document.getElementById('filter-user-status')?.value || 'ALL';
 
   // Update Summary Metric Cards
   const totalEl = document.getElementById('stat-total-users');
@@ -3202,22 +3552,37 @@ function renderTableUsers() {
   if (kasirEl) kasirEl.textContent = users.filter(u => u.role === 'KASIR').length;
 
   const filtered = users.filter(u => {
-    if (!query) return true;
-    return (
-      (u.name && u.name.toLowerCase().includes(query)) ||
-      (u.username && u.username.toLowerCase().includes(query)) ||
-      (u.roleLabel && u.roleLabel.toLowerCase().includes(query))
-    );
+    if (query) {
+      const match = (u.name && u.name.toLowerCase().includes(query)) ||
+                    (u.username && u.username.toLowerCase().includes(query)) ||
+                    (u.roleLabel && u.roleLabel.toLowerCase().includes(query));
+      if (!match) return false;
+    }
+    if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
+    if (statusFilter !== 'ALL' && u.status !== statusFilter) return false;
+    return true;
   });
+
+  const counterEl = document.getElementById('users-filter-counter');
+  if (counterEl) {
+    if (filtered.length === users.length) {
+      counterEl.textContent = `Menampilkan semua: ${users.length} Akun`;
+    } else {
+      counterEl.textContent = `Menampilkan: ${filtered.length} dari ${users.length} Akun`;
+    }
+  }
 
   tbody.innerHTML = '';
 
   if (filtered.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="py-8 text-center text-slate-400">
+        <td colspan="7" class="py-10 text-center text-slate-400">
           <i data-lucide="shield-alert" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
-          Tidak ada akun pengguna yang sesuai dengan pencarian.
+          <div>Tidak ada akun pengguna yang sesuai dengan filter pencarian.</div>
+          <button onclick="resetUserFilters()" class="mt-2 px-3 py-1 bg-brand-50 text-brand-700 font-bold rounded-lg border border-brand-200 hover:bg-brand-100 transition text-xs">
+            Reset Semua Filter
+          </button>
         </td>
       </tr>
     `;
@@ -4032,6 +4397,7 @@ function getUnpaidCustomerRows() {
   const { y, m } = getUnpaidBroadcastPeriod();
   const statusFilter = document.getElementById('bcast-unpaid-status-filter')?.value || 'ALL_UNPAID';
   const ponFilter = document.getElementById('bcast-unpaid-pon-filter')?.value || 'ALL';
+  const tariffFilter = document.getElementById('bcast-unpaid-tariff-filter')?.value || 'ALL';
   const searchVal = (document.getElementById('bcast-unpaid-search')?.value || '').trim().toLowerCase();
 
   const rows = [];
@@ -4055,6 +4421,7 @@ function getUnpaidCustomerRows() {
     if (statusFilter === 'BELUM' && bill.status !== 'BELUM') return;
     if (statusFilter === 'SEBAGIAN' && bill.status !== 'SEBAGIAN') return;
     if (ponFilter !== 'ALL' && String(cust.pon) !== String(ponFilter)) return;
+    if (tariffFilter !== 'ALL' && String(Number(cust.price) || 0) !== String(tariffFilter)) return;
 
     if (searchVal) {
       const matchName = (cust.name || '').toLowerCase().includes(searchVal);
@@ -4324,11 +4691,13 @@ function refreshOutageTemplateText() {
 
 function getOutageFilteredCustomers() {
   const ponFilter = document.getElementById('bcast-outage-pon-filter')?.value || 'ALL';
+  const redamanFilter = document.getElementById('bcast-outage-redaman-filter')?.value || 'ALL';
   const searchVal = (document.getElementById('bcast-outage-search')?.value || '').trim().toLowerCase();
 
   return state.customers.filter(cust => {
     if (cust.status === 'BERHENTI') return false;
     if (ponFilter !== 'ALL' && String(cust.pon) !== String(ponFilter)) return false;
+    if (redamanFilter !== 'ALL' && getRedamanClassification(cust.redaman).category !== redamanFilter) return false;
     if (searchVal) {
       const mName = (cust.name || '').toLowerCase().includes(searchVal);
       const mAddr = (cust.address || '').toLowerCase().includes(searchVal);
