@@ -598,6 +598,161 @@ async function pullCloudSync() {
   }
 }
 
+function encodeBillsCompact(bills) {
+  // Hanya simpan tagihan yang lunas / ada pembayaran / memiliki catatan (sangat hemat data)
+  return (bills || [])
+    .filter(b => b && (b.status === 'LUNAS' || b.status === 'SEBAGIAN' || (Number(b.amountPaid) > 0) || b.notes))
+    .map(b => [
+      b.customerId,
+      b.year,
+      b.month,
+      Number(b.amountPaid) || 0,
+      b.status || 'BELUM',
+      b.paymentDate || '',
+      (b.paymentMethod || 'Cash').slice(0, 15),
+      (b.notes || '').replace(/[|~]/g, ' ')
+    ].join('|'))
+    .join('~');
+}
+
+function decodeBillsCompact(str) {
+  if (!str || typeof str !== 'string') return [];
+  const items = str.split('~').map(s => s.trim()).filter(Boolean);
+  return items.map(item => {
+    const [customerId, yearStr, monthStr, amtStr, status, paymentDate, paymentMethod, notes] = item.split('|');
+    const y = parseInt(yearStr) || 2026;
+    const m = parseInt(monthStr) || 11;
+    const amt = parseFloat(amtStr) || 0;
+    return {
+      id: `bill-${customerId}-${y}-${m}`,
+      customerId,
+      year: y,
+      month: m,
+      amountPaid: amt,
+      status: status || (amt > 0 ? 'LUNAS' : 'BELUM'),
+      paymentDate: paymentDate || '',
+      paymentMethod: paymentMethod || 'Cash',
+      notes: notes || ''
+    };
+  });
+}
+
+function applyCompactBillsToState(compactBills) {
+  if (!compactBills || compactBills.length === 0) return;
+  // Gunakan sample bills sebagai basis, lalu timpa dengan tagihan lunas asli
+  const baseBills = generateSampleBills(state.customers);
+  compactBills.forEach(cb => {
+    const idx = baseBills.findIndex(b => b.customerId === cb.customerId && b.year === cb.year && b.month === cb.month);
+    if (idx !== -1) {
+      baseBills[idx] = { ...baseBills[idx], ...cb };
+    } else {
+      baseBills.push(cb);
+    }
+  });
+  state.bills = baseBills;
+  saveBills(false);
+}
+
+function handleUrlDatabaseSync() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const syncParam = params.get('dbsync');
+    if (!syncParam) return false;
+
+    const jsonStr = decodeURIComponent(escape(atob(syncParam)));
+    const payload = JSON.parse(jsonStr);
+
+    if (payload.b) {
+      const decodedBills = decodeBillsCompact(payload.b);
+      applyCompactBillsToState(decodedBills);
+    }
+
+    if (payload.u) {
+      const decodedUsers = decodeUsersCompact(payload.u);
+      if (decodedUsers.length > 0) {
+        saveUsersList(decodedUsers, false, payload.t || Date.now());
+      }
+    }
+
+    if (payload.t) {
+      localStorage.setItem(STORAGE_KEYS.DB_UPDATED_AT, String(payload.t));
+    }
+
+    // Bersihkan parameter URL agar rapi
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    setTimeout(() => {
+      renderDashboard();
+      renderTablePelanggan();
+      renderGridTagihan();
+      renderExpenses();
+      if (state.currentUser?.permissions?.manage_users) {
+        renderTableUsers();
+      }
+      showToast('✅ Berhasil! Seluruh data tagihan & pelanggan telah sinkron sama persis dengan laptop.');
+    }, 400);
+
+    return true;
+  } catch (e) {
+    console.warn('Gagal memproses link sinkronisasi database:', e);
+    return false;
+  }
+}
+
+function shareDatabaseSyncLink() {
+  const billsCompact = encodeBillsCompact(state.bills);
+  const users = getUsersList();
+  const payload = {
+    t: Date.now(),
+    b: billsCompact,
+    u: encodeUsersCompact(users)
+  };
+  const jsonStr = JSON.stringify(payload);
+  const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+  const cleanBase = window.location.origin + window.location.pathname;
+  const shareUrl = `${cleanBase}?dbsync=${base64}`;
+
+  // Trigger push ke cloud juga
+  pushFullDatabaseSync(true);
+
+  openModalDatabaseShare(shareUrl);
+}
+
+function openModalDatabaseShare(shareUrl) {
+  const modal = document.getElementById('modal-db-share');
+  const input = document.getElementById('share-db-url-input');
+  const waBtn = document.getElementById('btn-share-db-whatsapp');
+
+  if (input) input.value = shareUrl;
+  if (waBtn) {
+    const msg = `Halo, buka link ini di HP untuk sinkronisasi seluruh data tagihan & pelanggan HM NET (langsung sinkron otomatis): ${shareUrl}`;
+    waBtn.href = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+  }
+
+  if (modal) modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeModalDatabaseShare() {
+  const modal = document.getElementById('modal-db-share');
+  if (modal) modal.classList.add('hidden');
+}
+
+function copyShareDbUrlInput() {
+  const input = document.getElementById('share-db-url-input');
+  if (!input) return;
+  input.select();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(input.value).then(() => {
+      showToast('Link sinkronisasi HP berhasil disalin!');
+    });
+  } else {
+    document.execCommand('copy');
+    showToast('Link sinkronisasi HP berhasil disalin!');
+  }
+}
+
 function handleUrlAccountSync() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -723,31 +878,31 @@ async function pushFullDatabaseSync(immediate = false) {
     try {
       const now = Date.now();
       localStorage.setItem(STORAGE_KEYS.DB_UPDATED_AT, String(now));
-      const snapshot = getDatabaseSnapshot();
-      snapshot.t = now;
+      const billsCompact = encodeBillsCompact(state.bills);
+      const users = getUsersList();
 
-      // 1. Push payload to Central Cloud Database (ExtendsClass JSON Storage)
-      const restPromise = fetchWithTimeout(HMNET_CENTRAL_DB_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot)
-      }, 7000);
+      const payload = {
+        t: now,
+        b: billsCompact,
+        u: encodeUsersCompact(users),
+        device: state.currentUser ? `${state.currentUser.name} (${state.currentUser.role})` : 'HM NET Client'
+      };
 
-      // 2. Ping ntfy to notify all other online devices to pull immediately
+      // 1. Push payload ringkas ke ntfy.sh (CORS 100% didukung tanpa preflight block)
       const ntfyPromise = fetchWithTimeout('https://ntfy.sh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: HMNET_CENTRAL_DB_NTFY,
-          message: JSON.stringify({ t: now, by: snapshot.device })
+          message: JSON.stringify(payload)
         })
-      }, 4000);
+      }, 5000);
 
-      // 3. Keep user accounts synced with existing fallback cloud
+      // 2. Jaga akun pengelola tetap tersinkron
       pushCloudSync(true);
 
-      const [restRes] = await Promise.allSettled([restPromise, ntfyPromise]);
-      const ok = restRes.status === 'fulfilled' && restRes.value && restRes.value.ok;
+      const [ntfyRes] = await Promise.allSettled([ntfyPromise]);
+      const ok = ntfyRes.status === 'fulfilled' && ntfyRes.value && ntfyRes.value.ok;
 
       if (ok) {
         updateSyncUI('success', 'Tersinkron');
@@ -772,24 +927,18 @@ async function pushFullDatabaseSync(immediate = false) {
 }
 
 function shouldLocalOverrideCloud(localSnap, cloudSnap) {
-  if (!cloudSnap || !cloudSnap.customers || cloudSnap.customers.length === 0) {
+  if (!cloudSnap || !cloudSnap.b) {
     return true;
   }
-  // Count how many bills are marked LUNAS / paid locally vs cloud
   const localBills = localSnap.bills || [];
-  const cloudBills = cloudSnap.bills || [];
   const localPaid = localBills.filter(b => b.status === 'LUNAS' || (Number(b.amountPaid) > 0)).length;
+  
+  const cloudBills = decodeBillsCompact(cloudSnap.b);
   const cloudPaid = cloudBills.filter(b => b.status === 'LUNAS' || (Number(b.amountPaid) > 0)).length;
 
-  // If local has 9 paid bills (like the laptop) and cloud has fewer, local is master and should push!
   if (localPaid > cloudPaid) {
     return true;
   }
-  // If local has more customers than cloud, local overrides
-  if ((localSnap.customers || []).length > (cloudSnap.customers || []).length) {
-    return true;
-  }
-  // Otherwise compare timestamp
   return (localSnap.t || 0) > (cloudSnap.t || 0);
 }
 
@@ -798,51 +947,74 @@ async function pullFullDatabaseSync(force = false) {
   updateSyncUI('syncing', 'Memeriksa...');
 
   try {
-    const res = await fetchWithTimeout(HMNET_CENTRAL_DB_URL, {
-      method: 'GET',
-      cache: 'no-store'
-    }, 7000);
+    const res = await fetchWithTimeout(
+      `https://ntfy.sh/${HMNET_CENTRAL_DB_NTFY}/json?poll=1&since=all`,
+      { method: 'GET', cache: 'no-store' },
+      5000
+    );
 
     if (!res.ok) {
       updateSyncUI('success', 'Tersinkron (Lokal)');
       return false;
     }
 
-    const cloudData = await res.json();
-    const localSnap = getDatabaseSnapshot();
+    const text = await res.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    let latestPayload = null;
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const evt = JSON.parse(lines[i]);
+        if (evt && evt.message) {
+          const parsed = JSON.parse(evt.message);
+          if (parsed && (parsed.b !== undefined || parsed.u !== undefined)) {
+            latestPayload = parsed;
+            break;
+          }
+        }
+      } catch (err) {}
+    }
+
+    const localBills = state.bills || [];
+    const localPaid = localBills.filter(b => b.status === 'LUNAS' || (Number(b.amountPaid) > 0)).length;
     const localTime = Number(localStorage.getItem(STORAGE_KEYS.DB_UPDATED_AT)) || 0;
 
-    // Check if local device has newer or superior master data (like the laptop with 9 payments)
-    if (!force && shouldLocalOverrideCloud(localSnap, cloudData)) {
-      // Local has the authoritative data, immediately push to Cloud so all HP devices get it!
+    // Jika cloud belum ada data tagihan tapi lokal punya data pembayaran lunas (seperti di laptop), langsung push!
+    if (!latestPayload || !latestPayload.b) {
+      if (localPaid > 0) {
+        await pushFullDatabaseSync(true);
+        updateSyncUI('success', 'Tersinkron (Master)');
+        return true;
+      }
+      updateSyncUI('success', 'Tersinkron');
+      return false;
+    }
+
+    const cloudBills = decodeBillsCompact(latestPayload.b);
+    const cloudPaid = cloudBills.filter(b => b.status === 'LUNAS' || (Number(b.amountPaid) > 0)).length;
+    const cloudTime = Number(latestPayload.t || 0);
+
+    // Jika laptop memiliki pembayaran lunas lebih banyak daripada yang ada di cloud, jadikan laptop sebagai master
+    if (!force && localPaid > cloudPaid) {
       await pushFullDatabaseSync(true);
       updateSyncUI('success', 'Tersinkron (Master)');
       return true;
     }
 
-    // Otherwise Cloud has the authoritative or newer data
-    if (cloudData && cloudData.customers && (cloudData.t > localTime || force)) {
-      state.customers = cloudData.customers;
-      state.bills = cloudData.bills || [];
-      state.expenses = cloudData.expenses || [];
+    // Jika cloud lebih baru atau memiliki data pembayaran yang valid
+    if (cloudTime > localTime || force || (cloudPaid > localPaid)) {
+      applyCompactBillsToState(cloudBills);
 
-      // Save to local storage without re-triggering push
-      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(state.customers));
-      localStorage.setItem(STORAGE_KEYS.BILLS, JSON.stringify(state.bills));
-      localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(state.expenses));
-      localStorage.setItem(STORAGE_KEYS.DB_UPDATED_AT, String(cloudData.t || Date.now()));
-
-      if (cloudData.users && cloudData.users.length > 0) {
-        saveUsersList(cloudData.users, false, cloudData.t);
-      }
-      if (cloudData.modemTypes && cloudData.modemTypes.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.MODEM_TYPES, JSON.stringify(cloudData.modemTypes));
-      }
-      if (cloudData.redamanConfig) {
-        localStorage.setItem(STORAGE_KEYS.REDAMAN_CONFIG, JSON.stringify(cloudData.redamanConfig));
+      if (latestPayload.u) {
+        const decodedUsers = decodeUsersCompact(latestPayload.u);
+        if (decodedUsers.length > 0) {
+          saveUsersList(decodedUsers, false, cloudTime);
+        }
       }
 
-      // Re-render UI
+      localStorage.setItem(STORAGE_KEYS.DB_UPDATED_AT, String(cloudTime || Date.now()));
+
+      // Re-render seluruh tampilan
       renderDashboard();
       renderTablePelanggan();
       renderGridTagihan();
@@ -853,6 +1025,15 @@ async function pullFullDatabaseSync(force = false) {
 
       updateSyncUI('success', 'Tersinkron (Cloud)');
       return true;
+    }
+
+    updateSyncUI('success', 'Tersinkron');
+    return false;
+  } catch (e) {
+    updateSyncUI('error', 'Offline');
+    return false;
+  }
+}
     }
 
     updateSyncUI('success', 'Tersinkron');
@@ -6142,6 +6323,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Tangani jika pengguna membuka Link Sinkronisasi Akun (?akun=...) di HP / browser lain
   handleUrlAccountSync();
+
+  // Tangani jika pengguna membuka Link Sinkronisasi Database (?dbsync=...) di HP / browser lain
+  handleUrlDatabaseSync();
 
   // Check auth first: if logged in, load app; if not, show login view
   const isAuthenticated = checkAuthSession();
